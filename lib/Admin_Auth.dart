@@ -258,7 +258,7 @@ class _AdminAuthState extends State<AdminAuth> {
           alignment: Alignment.center,
           child: SizedBox(
               height:75,
-              child: Image.asset("assets/images/bindu.png")),
+              child: Image.asset("assets/photos/bindu.png")),
         ),
         // Title with Google Fonts Cinzel
         Text(title, style: GoogleFonts.cinzel(fontSize: 24, fontWeight: FontWeight.bold, color: Colors.white, height: 1.15, letterSpacing: 1.0,)),
@@ -506,7 +506,7 @@ class _AdminAuthState extends State<AdminAuth> {
                     );
                   },
                   child: Image.asset(
-                    "assets/images/bindu.png",
+                    "assets/photos/bindu.png",
                     width: 20,
                     height: 20,
                     fit: BoxFit.contain,
@@ -546,7 +546,7 @@ class _AdminAuthState extends State<AdminAuth> {
               Row(
                 children: [
                   Image.asset(
-                    "assets/images/bindu.png",
+                    "assets/photos/bindu.png",
                     width: 16,
                     height: 16,
                     fit: BoxFit.contain,
@@ -580,7 +580,7 @@ class _AdminAuthState extends State<AdminAuth> {
             mainAxisSize: MainAxisSize.min,
             children: [
               Image.asset(
-                "assets/images/bindu.png",
+                "assets/photos/bindu.png",
                 width: 14,
                 height: 14,
                 fit: BoxFit.contain,
