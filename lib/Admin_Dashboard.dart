@@ -5,55 +5,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:permission_handler/permission_handler.dart';
 
-// ==========================================
-// DATA MODELS
-// ==========================================
-class ClientItems {
-  final String imgUrl;
-  const ClientItems({required this.imgUrl});
-}
-
-class ProjectItem {
-  final String title;
-  final String subTitle;
-  final String location;
-  final List<String> tags;
-  final String pricing;
-  final String bhk;
-  final String scope;
-  final String propertyType;
-  final String size;
-  final String description;
-  final List<String> imageUrls;
-
-  const ProjectItem({
-    required this.title,
-    required this.subTitle,
-    required this.location,
-    required this.tags,
-    required this.pricing,
-    required this.bhk,
-    required this.scope,
-    required this.propertyType,
-    required this.size,
-    required this.description,
-    required this.imageUrls,
-  });
-}
-
-class DecorProductItem {
-  final String title;
-  final String category;
-  final List<String> imageUrls;
-  final String description;
-
-  const DecorProductItem({
-    required this.title,
-    required this.category,
-    required this.imageUrls,
-    required this.description,
-  });
-}
+import 'Helper_Class.dart';
 
 // ==========================================
 // UNIFIED MEDIA DATA MODEL
@@ -70,15 +22,15 @@ class MediaItem {
 }
 
 // ==========================================
-// CENTRALIZED REACTIVE APP DATA STORE
+// CENTRALIZED DYNAMIC APP DATA STORE
 // ==========================================
 class AppDataStore {
-  static final ValueNotifier<List<ClientItems>> clientLogosNotifier = ValueNotifier([
+  static final List<ClientItems> clientLogos = [
     const ClientItems(imgUrl: "assets/images/img1.png"),
-    const ClientItems(imgUrl: "assets/clie/img2.png"),
-  ]);
+    const ClientItems(imgUrl: "assets/client_logos/img2.png"),
+  ];
 
-  static final ValueNotifier<List<ProjectItem>> projectsNotifier = ValueNotifier([
+  static final List<ProjectItem> projects = [
     const ProjectItem(
       title: "Modern Apartment Design in Mumbai",
       subTitle: "Villa Velloze",
@@ -94,9 +46,9 @@ class AppDataStore {
         "https://images.unsplash.com/photo-1618221195710-dd6b41faaea6?w=800"
       ],
     ),
-  ]);
+  ];
 
-  static final ValueNotifier<List<DecorProductItem>> productsNotifier = ValueNotifier([
+  static final List<DecorProductItem> products = [
     const DecorProductItem(
       title: "Premium Luxury Wallpaper",
       category: "Wallpapers",
@@ -105,23 +57,7 @@ class AppDataStore {
       ],
       description: "Elegant textured wallpapers for home spaces.",
     ),
-  ]);
-
-  static List<ClientItems> get clientLogos => clientLogosNotifier.value;
-  static List<ProjectItem> get projects => projectsNotifier.value;
-  static List<DecorProductItem> get products => productsNotifier.value;
-
-  static void addProduct(DecorProductItem item) {
-    productsNotifier.value = [...productsNotifier.value, item];
-  }
-
-  static void addProject(ProjectItem item) {
-    projectsNotifier.value = [...projectsNotifier.value, item];
-  }
-
-  static void addClients(List<ClientItems> items) {
-    clientLogosNotifier.value = [...clientLogosNotifier.value, ...items];
-  }
+  ];
 }
 
 // ==========================================
@@ -238,83 +174,68 @@ class OverviewDomainManager extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return ValueListenableBuilder(
-      valueListenable: AppDataStore.productsNotifier,
-      builder: (context, products, _) {
-        return ValueListenableBuilder(
-          valueListenable: AppDataStore.projectsNotifier,
-          builder: (context, projects, _) {
-            return ValueListenableBuilder(
-              valueListenable: AppDataStore.clientLogosNotifier,
-              builder: (context, clients, _) {
-                final int projectCount = projects.length;
-                final int productCount = products.length;
-                final int clientCount = clients.length;
+    final int projectCount = AppDataStore.projects.length;
+    final int productCount = AppDataStore.products.length;
+    final int clientCount = AppDataStore.clientLogos.length;
 
-                return SingleChildScrollView(
-                  padding: const EdgeInsets.all(20),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text("System Summary Overview", style: GoogleFonts.plusJakartaSans(fontSize: 18, fontWeight: FontWeight.bold, color: const Color(0xFF0F382C))),
-                      const SizedBox(height: 16),
-                      Row(
-                        children: [
-                          _buildCountCard("Projects", projectCount, Icons.apartment, Colors.blue, () => onNavigateToTab(1)),
-                          const SizedBox(width: 12),
-                          _buildCountCard("Products", productCount, Icons.category, Colors.orange, () => onNavigateToTab(2)),
-                          const SizedBox(width: 12),
-                          _buildCountCard("Clients", clientCount, Icons.people, Colors.green, () => onNavigateToTab(3)),
-                        ],
-                      ),
-                      const SizedBox(height: 24),
-                      _buildSummarySection(
-                        title: "Recent Projects",
-                        itemCount: projectCount,
-                        onViewAll: () => onNavigateToTab(1),
-                        child: ListView.builder(
-                          shrinkWrap: true,
-                          physics: const NeverScrollableScrollPhysics(),
-                          itemCount: projectCount > 3 ? 3 : projectCount,
-                          itemBuilder: (context, idx) {
-                            final item = projects[idx];
-                            return ListTile(
-                              dense: true,
-                              leading: const Icon(Icons.apartment, color: Color(0xFF0F382C)),
-                              title: Text(item.title, style: const TextStyle(fontWeight: FontWeight.bold)),
-                              subtitle: Text("${item.location} • ${item.pricing}"),
-                            );
-                          },
-                        ),
-                      ),
-                      const SizedBox(height: 16),
-                      _buildSummarySection(
-                        title: "Recent Products",
-                        itemCount: productCount,
-                        onViewAll: () => onNavigateToTab(2),
-                        child: ListView.builder(
-                          shrinkWrap: true,
-                          physics: const NeverScrollableScrollPhysics(),
-                          itemCount: productCount > 3 ? 3 : productCount,
-                          itemBuilder: (context, idx) {
-                            final item = products[idx];
-                            return ListTile(
-                              dense: true,
-                              leading: const Icon(Icons.category, color: Color(0xFFC5A059)),
-                              title: Text(item.title, style: const TextStyle(fontWeight: FontWeight.bold)),
-                              subtitle: Text(item.category),
-                            );
-                          },
-                        ),
-                      ),
-                    ],
-                  ),
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(20),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text("System Summary Overview", style: GoogleFonts.plusJakartaSans(fontSize: 18, fontWeight: FontWeight.bold, color: const Color(0xFF0F382C))),
+          const SizedBox(height: 16),
+          Row(
+            children: [
+              _buildCountCard("Projects", projectCount, Icons.apartment, Colors.blue, () => onNavigateToTab(1)),
+              const SizedBox(width: 12),
+              _buildCountCard("Products", productCount, Icons.category, Colors.orange, () => onNavigateToTab(2)),
+              const SizedBox(width: 12),
+              _buildCountCard("Clients", clientCount, Icons.people, Colors.green, () => onNavigateToTab(3)),
+            ],
+          ),
+          const SizedBox(height: 24),
+          _buildSummarySection(
+            title: "Recent Projects",
+            itemCount: projectCount,
+            onViewAll: () => onNavigateToTab(1),
+            child: ListView.builder(
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              itemCount: projectCount > 3 ? 3 : projectCount,
+              itemBuilder: (context, idx) {
+                final item = AppDataStore.projects[idx];
+                return ListTile(
+                  dense: true,
+                  leading: const Icon(Icons.apartment, color: Color(0xFF0F382C)),
+                  title: Text(item.title, style: const TextStyle(fontWeight: FontWeight.bold)),
+                  subtitle: Text("${item.location} • ${item.pricing}"),
                 );
               },
-            );
-          },
-        );
-      },
+            ),
+          ),
+          const SizedBox(height: 16),
+          _buildSummarySection(
+            title: "Recent Products",
+            itemCount: productCount,
+            onViewAll: () => onNavigateToTab(2),
+            child: ListView.builder(
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              itemCount: productCount > 3 ? 3 : productCount,
+              itemBuilder: (context, idx) {
+                final item = AppDataStore.products[idx];
+                return ListTile(
+                  dense: true,
+                  leading: const Icon(Icons.category, color: Color(0xFFC5A059)),
+                  title: Text(item.title, style: const TextStyle(fontWeight: FontWeight.bold)),
+                  subtitle: Text(item.category),
+                );
+              },
+            ),
+          ),
+        ],
+      ),
     );
   }
 
@@ -573,23 +494,22 @@ class _ProjectDomainManagerState extends State<ProjectDomainManager> {
         .where((u) => u.isNotEmpty)
         .toList();
 
-    AppDataStore.addProject(
-      ProjectItem(
-        title: _title.text.trim(),
-        subTitle: _subTitle.text.trim().isEmpty ? "Featured Residence" : _subTitle.text.trim(),
-        location: _location.text.trim().isEmpty ? "Mumbai" : _location.text.trim(),
-        tags: const ["Modern", "Exclusive"],
-        pricing: _pricing.text.trim().isEmpty ? "N/A" : _pricing.text.trim(),
-        bhk: _bhk.text.trim().isEmpty ? "3-BHK" : _bhk.text.trim(),
-        scope: _scope.text.trim().isEmpty ? "Full Interior" : _scope.text.trim(),
-        propertyType: "Apartment",
-        size: _size.text.trim().isEmpty ? "2000 sq ft" : _size.text.trim(),
-        description: _description.text.trim().isEmpty ? "No description provided." : _description.text.trim(),
-        imageUrls: imageUrls.isEmpty ? ["https://images.unsplash.com/photo-1618221195710-dd6b41faaea6?w=800"] : imageUrls,
-      ),
-    );
-
     setState(() {
+      AppDataStore.projects.add(
+        ProjectItem(
+          title: _title.text.trim(),
+          subTitle: _subTitle.text.trim().isEmpty ? "Featured Residence" : _subTitle.text.trim(),
+          location: _location.text.trim().isEmpty ? "Mumbai" : _location.text.trim(),
+          tags: const ["Modern", "Exclusive"],
+          pricing: _pricing.text.trim().isEmpty ? "N/A" : _pricing.text.trim(),
+          bhk: _bhk.text.trim().isEmpty ? "3-BHK" : _bhk.text.trim(),
+          scope: _scope.text.trim().isEmpty ? "Full Interior" : _scope.text.trim(),
+          propertyType: "Apartment",
+          size: _size.text.trim().isEmpty ? "2000 sq ft" : _size.text.trim(),
+          description: _description.text.trim().isEmpty ? "No description provided." : _description.text.trim(),
+          imageUrls: imageUrls.isEmpty ? ["https://images.unsplash.com/photo-1618221195710-dd6b41faaea6?w=800"] : imageUrls,
+        ),
+      );
       _mediaItems.clear();
       _title.clear();
       _subTitle.clear();
@@ -669,39 +589,34 @@ class _ProjectDomainManagerState extends State<ProjectDomainManager> {
             ),
           ),
           const SizedBox(height: 16),
-          ValueListenableBuilder(
-            valueListenable: AppDataStore.projectsNotifier,
-            builder: (context, projects, _) {
-              return Card(
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                child: Padding(
-                  padding: const EdgeInsets.all(16),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text("Active Projects Summary (${projects.length})", style: GoogleFonts.plusJakartaSans(fontSize: 16, fontWeight: FontWeight.bold)),
-                      const Divider(),
-                      ListView.builder(
-                        shrinkWrap: true,
-                        physics: const NeverScrollableScrollPhysics(),
-                        itemCount: projects.length,
-                        itemBuilder: (context, idx) {
-                          final item = projects[idx];
-                          return ListTile(
-                            leading: CircleAvatar(
-                              backgroundImage: item.imageUrls.isNotEmpty ? NetworkImage(item.imageUrls.first) : null,
-                              child: item.imageUrls.isEmpty ? const Icon(Icons.apartment) : null,
-                            ),
-                            title: Text(item.title, style: const TextStyle(fontWeight: FontWeight.bold)),
-                            subtitle: Text("${item.location} • ${item.pricing}"),
-                          );
-                        },
-                      )
-                    ],
-                  ),
-                ),
-              );
-            },
+          Card(
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text("Active Projects Summary (${AppDataStore.projects.length})", style: GoogleFonts.plusJakartaSans(fontSize: 16, fontWeight: FontWeight.bold)),
+                  const Divider(),
+                  ListView.builder(
+                    shrinkWrap: true,
+                    physics: const NeverScrollableScrollPhysics(),
+                    itemCount: AppDataStore.projects.length,
+                    itemBuilder: (context, idx) {
+                      final item = AppDataStore.projects[idx];
+                      return ListTile(
+                        leading: CircleAvatar(
+                          backgroundImage: item.imageUrls.isNotEmpty ? NetworkImage(item.imageUrls.first) : null,
+                          child: item.imageUrls.isEmpty ? const Icon(Icons.apartment) : null,
+                        ),
+                        title: Text(item.title, style: const TextStyle(fontWeight: FontWeight.bold)),
+                        subtitle: Text("${item.location} • ${item.pricing}"),
+                      );
+                    },
+                  )
+                ],
+              ),
+            ),
           )
         ],
       ),
@@ -744,16 +659,15 @@ class _ProductDomainManagerState extends State<ProductDomainManager> {
         .where((u) => u.isNotEmpty)
         .toList();
 
-    AppDataStore.addProduct(
-      DecorProductItem(
-        title: _title.text.trim(),
-        category: _selectedCategory,
-        imageUrls: imageUrls.isEmpty ? ["https://images.unsplash.com/photo-1618221195710-dd6b41faaea6?w=800"] : imageUrls,
-        description: _description.text.trim().isEmpty ? "High-quality decor item." : _description.text.trim(),
-      ),
-    );
-
     setState(() {
+      AppDataStore.products.add(
+        DecorProductItem(
+          title: _title.text.trim(),
+          category: _selectedCategory,
+          imageUrls: imageUrls.isEmpty ? ["https://images.unsplash.com/photo-1618221195710-dd6b41faaea6?w=800"] : imageUrls,
+          description: _description.text.trim().isEmpty ? "High-quality decor item." : _description.text.trim(),
+        ),
+      );
       _mediaItems.clear();
       _title.clear();
       _description.clear();
@@ -766,94 +680,89 @@ class _ProductDomainManagerState extends State<ProductDomainManager> {
   @override
   Widget build(BuildContext context) {
     return SingleChildScrollView(
-        padding: const EdgeInsets.all(20),
-        child: Column(
-            children: [
-        Card(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-    child: Padding(
-    padding: const EdgeInsets.all(16),
-    child: Column(
-    crossAxisAlignment: CrossAxisAlignment.start,
-    children: [
-    Text("Add New Product Catalog Entry", style: GoogleFonts.plusJakartaSans(fontSize: 16, fontWeight: FontWeight.bold, color: const Color(0xFF0F382C))),
-    const SizedBox(height: 12),
-    TextField(controller: _title, decoration: const InputDecoration(labelText: "Product Title *", border: OutlineInputBorder())),
-    const SizedBox(height: 10),
-    DropdownButtonFormField<String>(
-    value: _selectedCategory,
-    decoration: const InputDecoration(labelText: "Category Selection", border: OutlineInputBorder()),
-    items: _categories.map((c) => DropdownMenuItem(value: c, child: Text(c))).toList(),
-    onChanged: (val) => setState(() => _selectedCategory = val!),
-    ),
-    const SizedBox(height: 10),
-    TextField(controller: _description, maxLines: 2, decoration: const InputDecoration(labelText: "Description", border: OutlineInputBorder())),
-    const SizedBox(height: 12),
-    MediaPickerWidget(
-    mediaList: _mediaItems,
-    webUrlController: _urlController,
-    onAddWebUrl: () {
-    if (_urlController.text.trim().isNotEmpty) {
-    setState(() {
-    _mediaItems.add(MediaItem(url: _urlController.text.trim()));
-    _urlController.clear();
-    });
-    }
-    },
-    onMediaAdded: (items) => setState(() => _mediaItems.addAll(items)),
-    onRemoveMedia: (idx) => setState(() => _mediaItems.removeAt(idx)),
-    ),
-    const SizedBox(height: 12),
-    SizedBox(
-    width: double.infinity,
-    height: 45,
-    child: ElevatedButton(
-    onPressed: _addProduct,
-    style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF0F382C), foregroundColor: Colors.white),
-    child: const Text("PUBLISH PRODUCT"),
-    ),
-    )
-    ],
-    ),
-    ),
-    ),
-    const SizedBox(height: 16),
-    ValueListenableBuilder(
-    valueListenable: AppDataStore.productsNotifier,
-    builder: (context, products, _) {
-    return Card(
-    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-    child: Padding(
-    padding: const EdgeInsets.all(16),
-    child: Column(
-    crossAxisAlignment: CrossAxisAlignment.start,
-    children: [
-    Text("Active Products Summary (${products.length})", style: GoogleFonts.plusJakartaSans(fontSize: 16, fontWeight: FontWeight.bold)),
-    const Divider(),
-    ListView.builder(
-    shrinkWrap: true,
-    physics: const NeverScrollableScrollPhysics(),
-    itemCount: products.length,
-    itemBuilder: (context, idx) {
-    final item = products[idx];
-    return ListTile(
-    leading: CircleAvatar(
-    backgroundImage: item.imageUrls.isNotEmpty ? NetworkImage(item.imageUrls.first) : null,
-    child: item.imageUrls.isEmpty ? const Icon(Icons.category) : null,
-    ),
-    title: Text(item.title, style: const TextStyle(fontWeight: FontWeight.bold)),
-    subtitle: Text(item.category),
-    );
-    },
-    )
-    ],
-    ),
-    );
-    },
-    ),
-    )
-    ],
-    ),
+      padding: const EdgeInsets.all(20),
+      child: Column(
+        children: [
+          Card(
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text("Add New Product Catalog Entry", style: GoogleFonts.plusJakartaSans(fontSize: 16, fontWeight: FontWeight.bold, color: const Color(0xFF0F382C))),
+                  const SizedBox(height: 12),
+                  TextField(controller: _title, decoration: const InputDecoration(labelText: "Product Title *", border: OutlineInputBorder())),
+                  const SizedBox(height: 10),
+                  DropdownButtonFormField<String>(
+                    value: _selectedCategory,
+                    decoration: const InputDecoration(labelText: "Category Selection", border: OutlineInputBorder()),
+                    items: _categories.map((c) => DropdownMenuItem(value: c, child: Text(c))).toList(),
+                    onChanged: (val) => setState(() => _selectedCategory = val!),
+                  ),
+                  const SizedBox(height: 10),
+                  TextField(controller: _description, maxLines: 2, decoration: const InputDecoration(labelText: "Description", border: OutlineInputBorder())),
+                  const SizedBox(height: 12),
+                  MediaPickerWidget(
+                    mediaList: _mediaItems,
+                    webUrlController: _urlController,
+                    onAddWebUrl: () {
+                      if (_urlController.text.trim().isNotEmpty) {
+                        setState(() {
+                          _mediaItems.add(MediaItem(url: _urlController.text.trim()));
+                          _urlController.clear();
+                        });
+                      }
+                    },
+                    onMediaAdded: (items) => setState(() => _mediaItems.addAll(items)),
+                    onRemoveMedia: (idx) => setState(() => _mediaItems.removeAt(idx)),
+                  ),
+                  const SizedBox(height: 12),
+                  SizedBox(
+                    width: double.infinity,
+                    height: 45,
+                    child: ElevatedButton(
+                      onPressed: _addProduct,
+                      style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF0F382C), foregroundColor: Colors.white),
+                      child: const Text("PUBLISH PRODUCT"),
+                    ),
+                  )
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 16),
+          Card(
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text("Active Products Summary (${AppDataStore.products.length})", style: GoogleFonts.plusJakartaSans(fontSize: 16, fontWeight: FontWeight.bold)),
+                  const Divider(),
+                  ListView.builder(
+                    shrinkWrap: true,
+                    physics: const NeverScrollableScrollPhysics(),
+                    itemCount: AppDataStore.products.length,
+                    itemBuilder: (context, idx) {
+                      final item = AppDataStore.products[idx];
+                      return ListTile(
+                        leading: CircleAvatar(
+                          backgroundImage: item.imageUrls.isNotEmpty ? NetworkImage(item.imageUrls.first) : null,
+                          child: item.imageUrls.isEmpty ? const Icon(Icons.category) : null,
+                        ),
+                        title: Text(item.title, style: const TextStyle(fontWeight: FontWeight.bold)),
+                        subtitle: Text(item.category),
+                      );
+                    },
+                  )
+                ],
+              ),
+            ),
+          )
+        ],
+      ),
     );
   }
 }
@@ -880,17 +789,14 @@ class _ClientDomainManagerState extends State<ClientDomainManager> {
       return;
     }
 
-    final newItems = _mediaItems.map((media) {
-      if (media.url != null && media.url!.isNotEmpty) {
-        return ClientItems(imgUrl: media.url!);
-      } else {
-        return const ClientItems(imgUrl: "assets/client_logos/img1.png");
-      }
-    }).toList();
-
-    AppDataStore.addClients(newItems);
-
     setState(() {
+      for (var media in _mediaItems) {
+        if (media.url != null && media.url!.isNotEmpty) {
+          AppDataStore.clientLogos.add(ClientItems(imgUrl: media.url!));
+        } else {
+          AppDataStore.clientLogos.add(const ClientItems(imgUrl: "assets/client_logos/img1.png"));
+        }
+      }
       _mediaItems.clear();
     });
 
@@ -901,90 +807,85 @@ class _ClientDomainManagerState extends State<ClientDomainManager> {
   @override
   Widget build(BuildContext context) {
     return SingleChildScrollView(
-        padding: const EdgeInsets.all(20),
-        child: Column(
-            children: [
-        Card(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-    child: Padding(
-    padding: const EdgeInsets.all(16),
-    child: Column(
-    crossAxisAlignment: CrossAxisAlignment.start,
-    children: [
-    Text("Add Client Logos", style: GoogleFonts.plusJakartaSans(fontSize: 16, fontWeight: FontWeight.bold, color: const Color(0xFF0F382C))),
-    const SizedBox(height: 12),
-    MediaPickerWidget(
-    mediaList: _mediaItems,
-    webUrlController: _urlController,
-    onAddWebUrl: () {
-    if (_urlController.text.trim().isNotEmpty) {
-    setState(() {
-    _mediaItems.add(MediaItem(url: _urlController.text.trim()));
-    _urlController.clear();
-    });
-    }
-    },
-    onMediaAdded: (items) => setState(() => _mediaItems.addAll(items)),
-    onRemoveMedia: (idx) => setState(() => _mediaItems.removeAt(idx)),
-    ),
-    const SizedBox(height: 12),
-    SizedBox(
-    width: double.infinity,
-    height: 45,
-    child: ElevatedButton(
-    onPressed: _addClients,
-    style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF0F382C), foregroundColor: Colors.white),
-    child: const Text("SAVE CLIENT LOGOS"),
-    ),
-    )
-    ],
-    ),
-    ),
-    ),
-    const SizedBox(height: 16),
-    ValueListenableBuilder(
-    valueListenable: AppDataStore.clientLogosNotifier,
-    builder: (context, clientLogos, _) {
-    return Card(
-    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-    child: Padding(
-    padding: const EdgeInsets.all(16),
-    child: Column(
-    crossAxisAlignment: CrossAxisAlignment.start,
-    children: [
-    Text("Active Client Logos (${clientLogos.length})", style: GoogleFonts.plusJakartaSans(fontSize: 16, fontWeight: FontWeight.bold)),
-    const Divider(),
-    GridView.builder(
-    shrinkWrap: true,
-    physics: const NeverScrollableScrollPhysics(),
-    gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-    crossAxisCount: 3,
-    crossAxisSpacing: 10,
-    mainAxisSpacing: 10,
-    ),
-    itemCount: clientLogos.length,
-    itemBuilder: (context, idx) {
-    final item = clientLogos[idx];
-    return Container(
-    decoration: BoxDecoration(
-    border: Border.all(color: Colors.grey.shade300),
-    borderRadius: BorderRadius.circular(8),
-    ),
-    child: ClipRRect(
-    borderRadius: BorderRadius.circular(8),
-    child: buildUniversalImage(MediaItem(url: item.imgUrl)),
-    ),
-    );
-    },
-    )
-    ],
-    ),
-    );
-    },
-    ),
-    )
-    ],
-    ),
+      padding: const EdgeInsets.all(20),
+      child: Column(
+        children: [
+          Card(
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text("Add Client Logos", style: GoogleFonts.plusJakartaSans(fontSize: 16, fontWeight: FontWeight.bold, color: const Color(0xFF0F382C))),
+                  const SizedBox(height: 12),
+                  MediaPickerWidget(
+                    mediaList: _mediaItems,
+                    webUrlController: _urlController,
+                    onAddWebUrl: () {
+                      if (_urlController.text.trim().isNotEmpty) {
+                        setState(() {
+                          _mediaItems.add(MediaItem(url: _urlController.text.trim()));
+                          _urlController.clear();
+                        });
+                      }
+                    },
+                    onMediaAdded: (items) => setState(() => _mediaItems.addAll(items)),
+                    onRemoveMedia: (idx) => setState(() => _mediaItems.removeAt(idx)),
+                  ),
+                  const SizedBox(height: 12),
+                  SizedBox(
+                    width: double.infinity,
+                    height: 45,
+                    child: ElevatedButton(
+                      onPressed: _addClients,
+                      style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF0F382C), foregroundColor: Colors.white),
+                      child: const Text("SAVE CLIENT LOGOS"),
+                    ),
+                  )
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 16),
+          Card(
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text("Active Client Logos (${AppDataStore.clientLogos.length})", style: GoogleFonts.plusJakartaSans(fontSize: 16, fontWeight: FontWeight.bold)),
+                  const Divider(),
+                  GridView.builder(
+                    shrinkWrap: true,
+                    physics: const NeverScrollableScrollPhysics(),
+                    gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                      crossAxisCount: 3,
+                      crossAxisSpacing: 10,
+                      mainAxisSpacing: 10,
+                    ),
+                    itemCount: AppDataStore.clientLogos.length,
+                    itemBuilder: (context, idx) {
+                      final item = AppDataStore.clientLogos[idx];
+                      return Container(
+                        decoration: BoxDecoration(
+                          border: Border.all(color: Colors.grey.shade300),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(8),
+                          child: buildUniversalImage(MediaItem(url: item.imgUrl)),
+                        ),
+                      );
+                    },
+                  )
+                ],
+              ),
+            ),
+          )
+        ],
+      ),
     );
   }
 }
