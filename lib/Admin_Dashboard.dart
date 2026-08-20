@@ -120,30 +120,6 @@ class _AdminDashboardState extends State<AdminDashboard> with SingleTickerProvid
     _tabController = TabController(length: 4, vsync: this);
   }
 
-  Future<void> logout() async {
-    final prefs = await SharedPreferences.getInstance();
-
-    final userId = prefs.getInt('user_id');
-
-    try {
-      if (userId != null) {
-        await Api.logout(userId: userId);
-      }
-    } catch (e) {
-      // Even if API fails, clear local login.
-    }
-
-    await prefs.clear();
-
-    if (!mounted) return;
-
-    Navigator.pushNamedAndRemoveUntil(
-      context,
-      '/login',
-          (route) => false,
-    );
-  }
-
   @override
   void dispose() {
     _tabController.dispose();
@@ -179,17 +155,14 @@ class _AdminDashboardState extends State<AdminDashboard> with SingleTickerProvid
         actions: [
           Padding(
             padding: const EdgeInsets.all(8.0),
-            child: InkWell(
-              onTap: logout,
-              child: Container(
-                padding: EdgeInsets.all(10),
-                decoration: BoxDecoration(
-                  border: Border.all(color: Colors.black, width: 2),
-                  borderRadius: BorderRadius.circular(12),
-                  color: Colors.white
-                ),
-                child: Icon(Icons.logout, size: 20, color: Colors.black),
+            child: Container(
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                border: Border.all(color: Colors.black, width: 2),
+                borderRadius: BorderRadius.circular(12),
+                color: Colors.white,
               ),
+              child: const Icon(Icons.logout, size: 20, color: Colors.black),
             ),
           )
         ],
@@ -228,14 +201,29 @@ class OverviewDomainManager extends StatelessWidget {
         children: [
           Text("System Summary Overview", style: GoogleFonts.plusJakartaSans(fontSize: 18, fontWeight: FontWeight.bold, color: const Color(0xFF0F382C))),
           const SizedBox(height: 16),
-          Row(
-            children: [
-              _buildCountCard("Projects", projectCount, Icons.apartment, Colors.blue, () => onNavigateToTab(1)),
-              const SizedBox(width: 12),
-              _buildCountCard("Products", productCount, Icons.category, Colors.orange, () => onNavigateToTab(2)),
-              const SizedBox(width: 12),
-              _buildCountCard("Clients", clientCount, Icons.people, Colors.green, () => onNavigateToTab(3)),
-            ],
+          LayoutBuilder(
+            builder: (context, constraints) {
+              if (constraints.maxWidth < 600) {
+                return Column(
+                  children: [
+                    _buildCountCard("Projects", projectCount, Icons.apartment, Colors.blue, () => onNavigateToTab(1)),
+                    const SizedBox(height: 10),
+                    _buildCountCard("Products", productCount, Icons.category, Colors.orange, () => onNavigateToTab(2)),
+                    const SizedBox(height: 10),
+                    _buildCountCard("Clients", clientCount, Icons.people, Colors.green, () => onNavigateToTab(3)),
+                  ],
+                );
+              }
+              return Row(
+                children: [
+                  Expanded(child: _buildCountCard("Projects", projectCount, Icons.apartment, Colors.blue, () => onNavigateToTab(1))),
+                  const SizedBox(width: 12),
+                  Expanded(child: _buildCountCard("Products", productCount, Icons.category, Colors.orange, () => onNavigateToTab(2))),
+                  const SizedBox(width: 12),
+                  Expanded(child: _buildCountCard("Clients", clientCount, Icons.people, Colors.green, () => onNavigateToTab(3))),
+                ],
+              );
+            },
           ),
           const SizedBox(height: 24),
           _buildSummarySection(
@@ -251,7 +239,7 @@ class OverviewDomainManager extends StatelessWidget {
                 return ListTile(
                   dense: true,
                   leading: const Icon(Icons.apartment, color: Color(0xFF0F382C)),
-                  title: Text(item.title, style: const TextStyle(fontWeight: FontWeight.bold)),
+                  title: Text(item.title, style: const TextStyle(fontWeight: FontWeight.bold), maxLines: 1, overflow: TextOverflow.ellipsis),
                   subtitle: Text("${item.location} • ${item.pricing}"),
                 );
               },
@@ -271,7 +259,7 @@ class OverviewDomainManager extends StatelessWidget {
                 return ListTile(
                   dense: true,
                   leading: const Icon(Icons.category, color: Color(0xFFC5A059)),
-                  title: Text(item.title, style: const TextStyle(fontWeight: FontWeight.bold)),
+                  title: Text(item.title, style: const TextStyle(fontWeight: FontWeight.bold), maxLines: 1, overflow: TextOverflow.ellipsis),
                   subtitle: Text(item.category),
                 );
               },
@@ -283,23 +271,21 @@ class OverviewDomainManager extends StatelessWidget {
   }
 
   Widget _buildCountCard(String label, int count, IconData icon, Color color, VoidCallback onTap) {
-    return Expanded(
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(12),
-        child: Card(
-          elevation: 2,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-          child: Padding(
-            padding: const EdgeInsets.all(16),
-            child: Column(
-              children: [
-                Icon(icon, size: 32, color: color),
-                const SizedBox(height: 8),
-                Text(count.toString(), style: GoogleFonts.plusJakartaSans(fontSize: 22, fontWeight: FontWeight.bold)),
-                Text(label, style: GoogleFonts.plusJakartaSans(fontSize: 12, color: Colors.grey.shade700)),
-              ],
-            ),
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(12),
+      child: Card(
+        elevation: 2,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            children: [
+              Icon(icon, size: 32, color: color),
+              const SizedBox(height: 8),
+              Text(count.toString(), style: GoogleFonts.plusJakartaSans(fontSize: 22, fontWeight: FontWeight.bold)),
+              Text(label, style: GoogleFonts.plusJakartaSans(fontSize: 12, color: Colors.grey.shade700)),
+            ],
           ),
         ),
       ),
@@ -317,7 +303,7 @@ class OverviewDomainManager extends StatelessWidget {
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Text("$title ($itemCount)", style: GoogleFonts.plusJakartaSans(fontSize: 16, fontWeight: FontWeight.bold)),
+                Expanded(child: Text("$title ($itemCount)", style: GoogleFonts.plusJakartaSans(fontSize: 16, fontWeight: FontWeight.bold), maxLines: 1, overflow: TextOverflow.ellipsis)),
                 TextButton(onPressed: onViewAll, child: const Text("Manage")),
               ],
             ),
@@ -331,7 +317,7 @@ class OverviewDomainManager extends StatelessWidget {
 }
 
 // ==========================================
-// SHARED MEDIA PICKER COMPONENT (WITH PERMISSIONS)
+// SHARED MEDIA PICKER COMPONENT
 // ==========================================
 class MediaPickerWidget extends StatelessWidget {
   final List<MediaItem> mediaList;
@@ -349,21 +335,14 @@ class MediaPickerWidget extends StatelessWidget {
     required this.onRemoveMedia,
   });
 
-  /// Check whether camera option should be hidden (Hidden on Desktop Web)
   bool get _shouldShowCameraButton {
     if (kIsWeb) {
-      // Show camera button on mobile web browsers, hide on desktop web
-      return defaultTargetPlatform == TargetPlatform.android ||
-          defaultTargetPlatform == TargetPlatform.iOS;
+      return defaultTargetPlatform == TargetPlatform.android || defaultTargetPlatform == TargetPlatform.iOS;
     }
-    // Show camera button on mobile native apps (Android/iOS)
-    return defaultTargetPlatform == TargetPlatform.android ||
-        defaultTargetPlatform == TargetPlatform.iOS;
+    return defaultTargetPlatform == TargetPlatform.android || defaultTargetPlatform == TargetPlatform.iOS;
   }
 
-  /// Handles runtime permissions cross-platform
   Future<bool> _requestPermission(Permission permission, BuildContext context) async {
-    // Web platform handles permissions natively via browser popups
     if (kIsWeb) return true;
 
     final status = await permission.status;
@@ -386,14 +365,8 @@ class MediaPickerWidget extends StatelessWidget {
     return false;
   }
 
-  /// Pick images from local gallery / media store
   Future<void> _pickFiles(BuildContext context) async {
     Permission storagePermission = Permission.photos;
-
-    if (!kIsWeb && defaultTargetPlatform == TargetPlatform.android) {
-      // For Android API levels support
-      storagePermission = Permission.photos;
-    }
 
     bool granted = await _requestPermission(storagePermission, context);
     if (!granted && !kIsWeb) return;
@@ -413,7 +386,6 @@ class MediaPickerWidget extends StatelessWidget {
     }
   }
 
-  /// Pick image from camera (Works on Mobile Native & Mobile Web)
   Future<void> _pickCamera(BuildContext context) async {
     bool granted = await _requestPermission(Permission.camera, context);
     if (!granted && !kIsWeb) return;
@@ -458,7 +430,7 @@ class MediaPickerWidget extends StatelessWidget {
               child: TextField(
                 controller: webUrlController,
                 decoration: InputDecoration(
-                  hintText: "Paste image address (Pinterest, Unsplash, Google)...",
+                  hintText: "Paste image address...",
                   isDense: true,
                   border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
                 ),
@@ -483,17 +455,16 @@ class MediaPickerWidget extends StatelessWidget {
               child: OutlinedButton.icon(
                 onPressed: () => _pickFiles(context),
                 icon: const Icon(Icons.folder_open, size: 18),
-                label: const Text("Browse Local Files"),
+                label: const Text("Browse Local Files", overflow: TextOverflow.ellipsis),
               ),
             ),
-            // Dynamically show camera button only on mobile web and mobile apps
             if (_shouldShowCameraButton) ...[
               const SizedBox(width: 8),
               Expanded(
                 child: OutlinedButton.icon(
                   onPressed: () => _pickCamera(context),
                   icon: const Icon(Icons.camera_alt, size: 18),
-                  label: const Text("Camera"),
+                  label: const Text("Camera", overflow: TextOverflow.ellipsis),
                 ),
               ),
             ],
@@ -612,6 +583,30 @@ class _ProjectDomainManagerState extends State<ProjectDomainManager> {
     ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("New Project added successfully!")));
   }
 
+  void _deleteProject(int index) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text("Delete Project"),
+        content: Text("Are you sure you want to delete '${AppDataStore.projects[index].title}'?"),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text("CANCEL")),
+          TextButton(
+            onPressed: () {
+              setState(() {
+                AppDataStore.projects.removeAt(index);
+              });
+              widget.onDataChanged();
+              Navigator.pop(ctx);
+              ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Project deleted!")));
+            },
+            child: const Text("DELETE", style: TextStyle(color: Colors.red)),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return SingleChildScrollView(
@@ -685,7 +680,9 @@ class _ProjectDomainManagerState extends State<ProjectDomainManager> {
                 children: [
                   Text("Active Projects Summary (${AppDataStore.projects.length})", style: GoogleFonts.plusJakartaSans(fontSize: 16, fontWeight: FontWeight.bold)),
                   const Divider(),
-                  ListView.builder(
+                  AppDataStore.projects.isEmpty
+                      ? const Padding(padding: EdgeInsets.all(8.0), child: Text("No projects available."))
+                      : ListView.builder(
                     shrinkWrap: true,
                     physics: const NeverScrollableScrollPhysics(),
                     itemCount: AppDataStore.projects.length,
@@ -696,8 +693,12 @@ class _ProjectDomainManagerState extends State<ProjectDomainManager> {
                           backgroundImage: item.imageUrls.isNotEmpty ? NetworkImage(item.imageUrls.first) : null,
                           child: item.imageUrls.isEmpty ? const Icon(Icons.apartment) : null,
                         ),
-                        title: Text(item.title, style: const TextStyle(fontWeight: FontWeight.bold)),
+                        title: Text(item.title, style: const TextStyle(fontWeight: FontWeight.bold), maxLines: 1, overflow: TextOverflow.ellipsis),
                         subtitle: Text("${item.location} • ${item.pricing}"),
+                        trailing: IconButton(
+                          icon: const Icon(Icons.delete_outline, color: Colors.red),
+                          onPressed: () => _deleteProject(idx),
+                        ),
                       );
                     },
                   )
@@ -764,6 +765,30 @@ class _ProductDomainManagerState extends State<ProductDomainManager> {
     ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("New Product added successfully!")));
   }
 
+  void _deleteProduct(int index) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text("Delete Product"),
+        content: Text("Are you sure you want to delete '${AppDataStore.products[index].title}'?"),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text("CANCEL")),
+          TextButton(
+            onPressed: () {
+              setState(() {
+                AppDataStore.products.removeAt(index);
+              });
+              widget.onDataChanged();
+              Navigator.pop(ctx);
+              ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Product deleted!")));
+            },
+            child: const Text("DELETE", style: TextStyle(color: Colors.red)),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return SingleChildScrollView(
@@ -828,7 +853,9 @@ class _ProductDomainManagerState extends State<ProductDomainManager> {
                 children: [
                   Text("Active Products Summary (${AppDataStore.products.length})", style: GoogleFonts.plusJakartaSans(fontSize: 16, fontWeight: FontWeight.bold)),
                   const Divider(),
-                  ListView.builder(
+                  AppDataStore.products.isEmpty
+                      ? const Padding(padding: EdgeInsets.all(8.0), child: Text("No products available."))
+                      : ListView.builder(
                     shrinkWrap: true,
                     physics: const NeverScrollableScrollPhysics(),
                     itemCount: AppDataStore.products.length,
@@ -839,8 +866,12 @@ class _ProductDomainManagerState extends State<ProductDomainManager> {
                           backgroundImage: item.imageUrls.isNotEmpty ? NetworkImage(item.imageUrls.first) : null,
                           child: item.imageUrls.isEmpty ? const Icon(Icons.category) : null,
                         ),
-                        title: Text(item.title, style: const TextStyle(fontWeight: FontWeight.bold)),
+                        title: Text(item.title, style: const TextStyle(fontWeight: FontWeight.bold), maxLines: 1, overflow: TextOverflow.ellipsis),
                         subtitle: Text(item.category),
+                        trailing: IconButton(
+                          icon: const Icon(Icons.delete_outline, color: Colors.red),
+                          onPressed: () => _deleteProduct(idx),
+                        ),
                       );
                     },
                   )
@@ -889,6 +920,30 @@ class _ClientDomainManagerState extends State<ClientDomainManager> {
 
     widget.onDataChanged();
     ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Client entries updated!")));
+  }
+
+  void _deleteClient(int index) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text("Delete Client Logo"),
+        content: const Text("Are you sure you want to delete this client logo?"),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text("CANCEL")),
+          TextButton(
+            onPressed: () {
+              setState(() {
+                AppDataStore.clientLogos.removeAt(index);
+              });
+              widget.onDataChanged();
+              Navigator.pop(ctx);
+              ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Client logo deleted!")));
+            },
+            child: const Text("DELETE", style: TextStyle(color: Colors.red)),
+          ),
+        ],
+      ),
+    );
   }
 
   @override
@@ -944,7 +999,9 @@ class _ClientDomainManagerState extends State<ClientDomainManager> {
                 children: [
                   Text("Active Client Logos (${AppDataStore.clientLogos.length})", style: GoogleFonts.plusJakartaSans(fontSize: 16, fontWeight: FontWeight.bold)),
                   const Divider(),
-                  GridView.builder(
+                  AppDataStore.clientLogos.isEmpty
+                      ? const Padding(padding: EdgeInsets.all(8.0), child: Text("No client logos available."))
+                      : GridView.builder(
                     shrinkWrap: true,
                     physics: const NeverScrollableScrollPhysics(),
                     gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
@@ -955,15 +1012,33 @@ class _ClientDomainManagerState extends State<ClientDomainManager> {
                     itemCount: AppDataStore.clientLogos.length,
                     itemBuilder: (context, idx) {
                       final item = AppDataStore.clientLogos[idx];
-                      return Container(
-                        decoration: BoxDecoration(
-                          border: Border.all(color: Colors.grey.shade300),
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: ClipRRect(
-                          borderRadius: BorderRadius.circular(8),
-                          child: buildUniversalImage(MediaItem(url: item.imgUrl)),
-                        ),
+                      return Stack(
+                        children: [
+                          Container(
+                            width: double.infinity,
+                            height: double.infinity,
+                            decoration: BoxDecoration(
+                              border: Border.all(color: Colors.grey.shade300),
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: ClipRRect(
+                              borderRadius: BorderRadius.circular(8),
+                              child: buildUniversalImage(MediaItem(url: item.imgUrl)),
+                            ),
+                          ),
+                          Positioned(
+                            top: 4,
+                            right: 4,
+                            child: GestureDetector(
+                              onTap: () => _deleteClient(idx),
+                              child: const CircleAvatar(
+                                radius: 12,
+                                backgroundColor: Colors.red,
+                                child: Icon(Icons.delete, size: 14, color: Colors.white),
+                              ),
+                            ),
+                          ),
+                        ],
                       );
                     },
                   )
