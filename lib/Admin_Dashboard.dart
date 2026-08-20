@@ -4,7 +4,9 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:permission_handler/permission_handler.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
+import 'Api/App_Api.dart';
 import 'Helper_Class.dart';
 
 // ==========================================
@@ -118,6 +120,30 @@ class _AdminDashboardState extends State<AdminDashboard> with SingleTickerProvid
     _tabController = TabController(length: 4, vsync: this);
   }
 
+  Future<void> logout() async {
+    final prefs = await SharedPreferences.getInstance();
+
+    final userId = prefs.getInt('user_id');
+
+    try {
+      if (userId != null) {
+        await Api.logout(userId: userId);
+      }
+    } catch (e) {
+      // Even if API fails, clear local login.
+    }
+
+    await prefs.clear();
+
+    if (!mounted) return;
+
+    Navigator.pushNamedAndRemoveUntil(
+      context,
+      '/login',
+          (route) => false,
+    );
+  }
+
   @override
   void dispose() {
     _tabController.dispose();
@@ -150,6 +176,23 @@ class _AdminDashboardState extends State<AdminDashboard> with SingleTickerProvid
             Tab(icon: Icon(Icons.people), text: "Clients"),
           ],
         ),
+        actions: [
+          Padding(
+            padding: const EdgeInsets.all(8.0),
+            child: InkWell(
+              onTap: logout,
+              child: Container(
+                padding: EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  border: Border.all(color: Colors.black, width: 2),
+                  borderRadius: BorderRadius.circular(12),
+                  color: Colors.white
+                ),
+                child: Icon(Icons.logout, size: 20, color: Colors.black),
+              ),
+            ),
+          )
+        ],
       ),
       body: TabBarView(
         controller: _tabController,
