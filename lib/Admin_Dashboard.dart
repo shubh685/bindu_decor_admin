@@ -26,8 +26,8 @@ class MediaItem {
 // ==========================================
 class AppDataStore {
   static final List<ClientItems> clientLogos = [
-    const ClientItems(imgUrl: "assets/images/img1.png"),
-    const ClientItems(imgUrl: "assets/client_logos/img2.png"),
+    const ClientItems(imgUrl: "assets/photos/img1.png"),
+    const ClientItems(imgUrl: "assets/photos/img2.png"),
   ];
 
   static final List<ProjectItem> projects = [
@@ -306,8 +306,23 @@ class MediaPickerWidget extends StatelessWidget {
     required this.onRemoveMedia,
   });
 
+  /// Check whether camera option should be hidden (Hidden on Desktop Web)
+  bool get _shouldShowCameraButton {
+    if (kIsWeb) {
+      // Show camera button on mobile web browsers, hide on desktop web
+      return defaultTargetPlatform == TargetPlatform.android ||
+          defaultTargetPlatform == TargetPlatform.iOS;
+    }
+    // Show camera button on mobile native apps (Android/iOS)
+    return defaultTargetPlatform == TargetPlatform.android ||
+        defaultTargetPlatform == TargetPlatform.iOS;
+  }
+
+  /// Handles runtime permissions cross-platform
   Future<bool> _requestPermission(Permission permission, BuildContext context) async {
+    // Web platform handles permissions natively via browser popups
     if (kIsWeb) return true;
+
     final status = await permission.status;
     if (status.isGranted) return true;
 
@@ -318,17 +333,23 @@ class MediaPickerWidget extends StatelessWidget {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: const Text("Permission permanently denied. Please enable it in Settings."),
-          action: SnackBarAction(label: "SETTINGS", onPressed: () => openAppSettings()),
+          action: SnackBarAction(
+            label: "SETTINGS",
+            onPressed: () => openAppSettings(),
+          ),
         ),
       );
     }
     return false;
   }
 
+  /// Pick images from local gallery / media store
   Future<void> _pickFiles(BuildContext context) async {
     Permission storagePermission = Permission.photos;
-    if (defaultTargetPlatform == TargetPlatform.android) {
-      storagePermission = Permission.mediaLibrary;
+
+    if (!kIsWeb && defaultTargetPlatform == TargetPlatform.android) {
+      // For Android API levels support
+      storagePermission = Permission.photos;
     }
 
     bool granted = await _requestPermission(storagePermission, context);
@@ -349,15 +370,28 @@ class MediaPickerWidget extends StatelessWidget {
     }
   }
 
+  /// Pick image from camera (Works on Mobile Native & Mobile Web)
   Future<void> _pickCamera(BuildContext context) async {
     bool granted = await _requestPermission(Permission.camera, context);
     if (!granted && !kIsWeb) return;
 
-    final ImagePicker picker = ImagePicker();
-    final XFile? photo = await picker.pickImage(source: ImageSource.camera);
-    if (photo != null) {
-      final bytes = await photo.readAsBytes();
-      onMediaAdded([MediaItem(bytes: bytes)]);
+    try {
+      final ImagePicker picker = ImagePicker();
+      final XFile? photo = await picker.pickImage(
+        source: ImageSource.camera,
+        preferredCameraDevice: CameraDevice.rear,
+      );
+
+      if (photo != null) {
+        final bytes = await photo.readAsBytes();
+        onMediaAdded([MediaItem(bytes: bytes)]);
+      }
+    } catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("Failed to capture image: $e")),
+        );
+      }
     }
   }
 
@@ -366,7 +400,14 @@ class MediaPickerWidget extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text("Media Attachment (Optional)", style: GoogleFonts.plusJakartaSans(fontSize: 14, fontWeight: FontWeight.bold, color: const Color(0xFF0F382C))),
+        Text(
+          "Media Attachment (Optional)",
+          style: GoogleFonts.plusJakartaSans(
+            fontSize: 14,
+            fontWeight: FontWeight.bold,
+            color: const Color(0xFF0F382C),
+          ),
+        ),
         const SizedBox(height: 8),
         Row(
           children: [
@@ -402,14 +443,17 @@ class MediaPickerWidget extends StatelessWidget {
                 label: const Text("Browse Local Files"),
               ),
             ),
-            const SizedBox(width: 8),
-            Expanded(
-              child: OutlinedButton.icon(
-                onPressed: () => _pickCamera(context),
-                icon: const Icon(Icons.camera_alt, size: 18),
-                label: const Text("Camera"),
+            // Dynamically show camera button only on mobile web and mobile apps
+            if (_shouldShowCameraButton) ...[
+              const SizedBox(width: 8),
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: () => _pickCamera(context),
+                  icon: const Icon(Icons.camera_alt, size: 18),
+                  label: const Text("Camera"),
+                ),
               ),
-            ),
+            ],
           ],
         ),
         if (mediaList.isNotEmpty) ...[
@@ -794,7 +838,7 @@ class _ClientDomainManagerState extends State<ClientDomainManager> {
         if (media.url != null && media.url!.isNotEmpty) {
           AppDataStore.clientLogos.add(ClientItems(imgUrl: media.url!));
         } else {
-          AppDataStore.clientLogos.add(const ClientItems(imgUrl: "assets/client_logos/img1.png"));
+          AppDataStore.clientLogos.add(const ClientItems(imgUrl: "assets/photos/img1.png"));
         }
       }
       _mediaItems.clear();

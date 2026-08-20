@@ -588,14 +588,7 @@ class _AdminAuthState extends State<AdminAuth> {
                 const Icon(Icons.security, color: LuxuryTheme.primaryAccent, size: 14),
               ),
               const SizedBox(width: 6),
-              Text(
-                "Secure & Encrypted",
-                style: GoogleFonts.plusJakartaSans(
-                  color: Colors.white70,
-                  fontSize: 11,
-                  fontWeight: FontWeight.w500,
-                ),
-              ),
+              Text("Secure & Encrypted", style: GoogleFonts.plusJakartaSans(color: Colors.white70, fontSize: 11, fontWeight: FontWeight.w500)),
             ],
           ),
         ),
