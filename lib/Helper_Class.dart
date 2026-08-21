@@ -9,7 +9,8 @@ class DecorProductItem {
 
   const DecorProductItem({
     required this.title,
-    this.category = "HOME DECOR", this.imageDetails,
+    this.category = "HOME DECOR",
+    this.imageDetails,
     required this.imageUrls,
     required this.description,
     this.material = "Premium Grade Material",
@@ -35,6 +36,7 @@ class ClientItems {
 }
 
 class ProjectItem {
+  final String id;
   final String title;
   final String subTitle;
   final String location;
@@ -48,6 +50,7 @@ class ProjectItem {
   final List<String> imageUrls;
 
   const ProjectItem({
+    required this.id,
     required this.title,
     required this.subTitle,
     required this.location,
@@ -60,4 +63,39 @@ class ProjectItem {
     required this.description,
     required this.imageUrls,
   });
+
+  // Factory constructor for MySQL response parsing
+  factory ProjectItem.fromMap(Map<String, dynamic> map) {
+    String image = map['image_url'] ?? map['imageUrl'] ?? '';
+    return ProjectItem(
+      id: map['id']?.toString() ?? '',
+      title: map['title'] ?? '',
+      subTitle: map['sub_title']  ?? '',
+      location: map['location'] ?? '',
+      tags: [],
+      pricing: map['pricing'] ?? '',
+      bhk: map['bhk'] ?? '',
+      scope: map['scope'] ?? '',
+      propertyType: map['property_type'] ??  '',
+      size: map['size'] ?? '',
+      description: map['description'] ?? '',
+      imageUrls: map['image_url'] ?? '',
+    );
+  }
+
+  Map<String, String> toMap() {
+    return {
+      'id': id,
+      'title': title,
+      'sub_title': subTitle,
+      'location': location,
+      'pricing': pricing,
+      'bhk': bhk,
+      'scope': scope,
+      'property_type': propertyType,
+      'size': size,
+      'description': description,
+      'image_url': imageUrls.isNotEmpty ? imageUrls.first : '',
+    };
+  }
 }
