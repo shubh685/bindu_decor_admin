@@ -34,32 +34,6 @@ class MediaItem {
   bool get hasBytes => bytes != null;
 }
 
-// ==========================================
-// CENTRALIZED DYNAMIC APP DATA STORE
-// ==========================================
-class AppDataStore {
-  static final List<ClientItems> clientLogos = [
-    const ClientItems(imgUrl: "assets/photos/img1.png"),
-    const ClientItems(imgUrl: "assets/photos/img2.png"),
-  ];
-
-  static final List<ProjectItem> projects = [];
-
-  static final List<DecorProductItem> products = [
-    const DecorProductItem(
-      title: "Premium Luxury Wallpaper",
-      category: "Wallpapers",
-      imageUrls: [
-        "https://images.unsplash.com/photo-1618221195710-dd6b41faaea6?w=800"
-      ],
-      description: "Elegant textured wallpapers for home spaces.",
-    ),
-  ];
-}
-
-// ==========================================
-// CROSS-PLATFORM SAFE IMAGE RENDERER
-// ==========================================
 Widget buildUniversalImage(MediaItem media, {BoxFit fit = BoxFit.cover}) {
   if (media.hasBytes) {
     return Image.memory(
@@ -69,7 +43,7 @@ Widget buildUniversalImage(MediaItem media, {BoxFit fit = BoxFit.cover}) {
     );
   }
 
-  final path = media.url ?? '';
+  String path = media.url?.trim() ?? '';
   if (path.isEmpty) {
     return Container(
       color: const Color(0xFFF2F2F2),
@@ -77,6 +51,7 @@ Widget buildUniversalImage(MediaItem media, {BoxFit fit = BoxFit.cover}) {
     );
   }
 
+  // Handle http/https prefix conversion safely
   if (media.isWebUrl) {
     return Image.network(
       path,
@@ -93,8 +68,30 @@ Widget buildUniversalImage(MediaItem media, {BoxFit fit = BoxFit.cover}) {
     );
   }
 
+  // Fallback rendering for relative server paths
+  if (!path.startsWith('http')) {
+    path = "${OperationsApi.baseUrl}/$path".replaceAll(RegExp(r'(?<!:)/{2,}'), '/');
+    return Image.network(
+      path,
+      fit: fit,
+      errorBuilder: (c, e, s) => const Icon(Icons.broken_image, color: Colors.grey),
+    );
+  }
+
   return const Icon(Icons.image, color: Colors.grey);
 }
+
+// ==========================================
+// CENTRALIZED DYNAMIC APP DATA STORE
+// ==========================================
+class AppDataStore {
+  static final List<ClientItems> clientLogos = [];
+
+  static final List<ProjectItem> projects = [];
+
+  static final List<DecorProductItem> products = [];
+}
+
 
 // ==========================================
 // MAIN ADMIN DASHBOARD
@@ -704,7 +701,7 @@ class _ProjectDomainManagerState extends State<ProjectDomainManager> {
         externalUrl = "https://images.unsplash.com/photo-1618221195710-dd6b41faaea6?w=800";
       }
 
-      // Payload keys precisely match $_POST keys in PHP
+      // Map fields strictly matching backend and database column naming
       final Map<String, String> fields = {
         "title": _title.text.trim(),
         "sub_title": _subTitle.text.trim().isEmpty ? "Featured Residence" : _subTitle.text.trim(),
@@ -1074,7 +1071,11 @@ class ProductDomainManager extends StatefulWidget {
 class _ProductDomainManagerState extends State<ProductDomainManager> {
   final _title = TextEditingController();
   final _description = TextEditingController();
+  final _materialController = TextEditingController(text: "Premium Grade Material");
+  final _printTypeController = TextEditingController(text: "High Definition Digital Print / Finish");
   final _urlController = TextEditingController();
+
+  bool _isLoading = false;
 
   String _selectedCategory = 'Wallpapers';
   final List<String> _categories = [
@@ -1083,36 +1084,109 @@ class _ProductDomainManagerState extends State<ProductDomainManager> {
   ];
   final List<MediaItem> _mediaItems = [];
 
-  void _addProduct() {
+  @override
+  void initState() {
+    super.initState();
+    _loadProductsFromServer();
+  }
+
+  Future<void> _loadProductsFromServer() async {
+    final serverProducts = await OperationsApi.fetchProducts();
+    if (mounted) {
+      setState(() {
+        AppDataStore.products.clear();
+        AppDataStore.products.addAll(serverProducts);
+      });
+      widget.onDataChanged();
+    }
+  }
+
+  Future<void> _addProduct() async {
     if (_title.text.trim().isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Product Title is required!")));
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Product Title is required!")),
+      );
       return;
     }
 
-    final imageUrls = _mediaItems
-        .map((m) => m.url ?? "")
-        .where((u) => u.isNotEmpty)
-        .toList();
-
     setState(() {
-      AppDataStore.products.add(
-        DecorProductItem(
-          title: _title.text.trim(),
-          category: _selectedCategory,
-          imageUrls: imageUrls.isEmpty ? ["https://images.unsplash.com/photo-1618221195710-dd6b41faaea6?w=800"] : imageUrls,
-          description: _description.text.trim().isEmpty ? "High-quality decor item." : _description.text.trim(),
-        ),
-      );
-      _mediaItems.clear();
-      _title.clear();
-      _description.clear();
+      _isLoading = true;
     });
 
-    widget.onDataChanged();
-    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("New Product added successfully!")));
+    try {
+      String externalUrl = "";
+      Uint8List? rawBytes;
+
+      if (_mediaItems.isNotEmpty) {
+        final selectedMedia = _mediaItems.first;
+        if (selectedMedia.hasBytes) {
+          rawBytes = selectedMedia.bytes;
+        } else if (selectedMedia.url != null && selectedMedia.url!.isNotEmpty) {
+          externalUrl = selectedMedia.url!;
+        }
+      }
+
+      final Map<String, String> fields = {
+        "title": _title.text.trim(),
+        "category": _selectedCategory,
+        "description": _description.text.trim().isEmpty ? "High-quality decor item." : _description.text.trim(),
+        "material": _materialController.text.trim().isEmpty ? "Premium Grade Material" : _materialController.text.trim(),
+        "print_type": _printTypeController.text.trim().isEmpty ? "High Definition Digital Print / Finish" : _printTypeController.text.trim(),
+        "image_url": externalUrl,
+      };
+
+      final response = await OperationsApi.addProduct(
+        fields: fields,
+        imageBytes: rawBytes,
+      );
+
+      if (!mounted) return;
+
+      if (response['status'] == 'success') {
+        String finalImageUrl = response['image_url'] ?? externalUrl;
+
+        AppDataStore.products.add(
+          DecorProductItem(
+            id: response['id']?.toString() ?? '',
+            title: fields["title"]!,
+            category: fields["category"]!,
+            imageUrls: finalImageUrl.isNotEmpty ? [finalImageUrl] : [],
+            description: fields["description"]!,
+            material: fields["material"],
+            printType: fields["print_type"],
+          ),
+        );
+
+        _mediaItems.clear();
+        _title.clear();
+        _description.clear();
+        _materialController.text = "Premium Grade Material";
+        _printTypeController.text = "High Definition Digital Print / Finish";
+
+        widget.onDataChanged();
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text("New product published successfully!")),
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("Failed to publish product: ${response['message']}")),
+        );
+      }
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text("Connection exception: $e")),
+      );
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
+    }
   }
 
-  void _deleteProduct(int index) {
+  void _deleteProduct(String id, int index) {
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -1122,13 +1196,16 @@ class _ProductDomainManagerState extends State<ProductDomainManager> {
         actions: [
           TextButton(onPressed: () => Navigator.pop(ctx), child: const Text("CANCEL")),
           TextButton(
-            onPressed: () {
-              setState(() {
-                AppDataStore.products.removeAt(index);
-              });
-              widget.onDataChanged();
-              Navigator.pop(ctx);
-              ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Product deleted!")));
+            onPressed: () async {
+              bool success = await OperationsApi.deleteProduct(id);
+              if (success && mounted) {
+                setState(() {
+                  AppDataStore.products.removeAt(index);
+                });
+                widget.onDataChanged();
+                Navigator.pop(ctx);
+                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Product deleted!")));
+              }
             },
             child: const Text("DELETE", style: TextStyle(color: Colors.redAccent)),
           ),
@@ -1212,6 +1289,14 @@ class _ProductDomainManagerState extends State<ProductDomainManager> {
                 ),
                 const SizedBox(height: 12),
                 _buildTextField(controller: _description, label: "Description", maxLines: 2),
+                const SizedBox(height: 12),
+                Row(
+                  children: [
+                    Expanded(child: _buildTextField(controller: _materialController, label: "Material Specification")),
+                    const SizedBox(width: 12),
+                    Expanded(child: _buildTextField(controller: _printTypeController, label: "Print / Finish Type")),
+                  ],
+                ),
                 const SizedBox(height: 16),
                 MediaPickerWidget(
                   mediaList: _mediaItems,
@@ -1232,14 +1317,20 @@ class _ProductDomainManagerState extends State<ProductDomainManager> {
                   width: double.infinity,
                   height: 48,
                   child: ElevatedButton(
-                    onPressed: _addProduct,
+                    onPressed: _isLoading ? null : _addProduct,
                     style: ElevatedButton.styleFrom(
                       backgroundColor: AdminTheme.primaryDark,
                       foregroundColor: Colors.white,
                       elevation: 2,
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                     ),
-                    child: Text("PUBLISH PRODUCT", style: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.bold, fontSize: 13, letterSpacing: 0.8)),
+                    child: _isLoading
+                        ? const SizedBox(
+                      width: 20,
+                      height: 20,
+                      child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
+                    )
+                        : Text("PUBLISH PRODUCT", style: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.bold, fontSize: 13, letterSpacing: 0.8)),
                   ),
                 )
               ],
@@ -1291,10 +1382,10 @@ class _ProductDomainManagerState extends State<ProductDomainManager> {
                         child: item.imageUrls.isEmpty ? const Icon(Icons.category_rounded, color: AdminTheme.primaryDark) : null,
                       ),
                       title: Text(item.title, style: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.bold, fontSize: 14), maxLines: 1, overflow: TextOverflow.ellipsis),
-                      subtitle: Text(item.category, style: GoogleFonts.plusJakartaSans(fontSize: 12, color: Colors.grey.shade600)),
+                      subtitle: Text("${item.category} • ${item.material}", style: GoogleFonts.plusJakartaSans(fontSize: 12, color: Colors.grey.shade600)),
                       trailing: IconButton(
                         icon: const Icon(Icons.delete_outline_rounded, color: Colors.redAccent),
-                        onPressed: () => _deleteProduct(idx),
+                        onPressed: () => _deleteProduct(item.id, idx),
                       ),
                     );
                   },
@@ -1323,29 +1414,91 @@ class ClientDomainManager extends StatefulWidget {
 class _ClientDomainManagerState extends State<ClientDomainManager> {
   final _urlController = TextEditingController();
   final List<MediaItem> _mediaItems = [];
+  bool _isLoading = false;
 
-  void _addClients() {
+  @override
+  void initState() {
+    super.initState();
+    _loadClientsFromServer();
+  }
+
+  Future<void> _loadClientsFromServer() async {
+    final serverClients = await OperationsApi.fetchClients();
+    if (mounted) {
+      setState(() {
+        AppDataStore.clientLogos.clear();
+        AppDataStore.clientLogos.addAll(serverClients);
+      });
+      widget.onDataChanged();
+    }
+  }
+
+  Future<void> _addClients() async {
     if (_mediaItems.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Please provide at least one client image/link!")));
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Please attach an image file or provide an image link!")),
+      );
       return;
     }
 
     setState(() {
-      for (var media in _mediaItems) {
-        if (media.url != null && media.url!.isNotEmpty) {
-          AppDataStore.clientLogos.add(ClientItems(imgUrl: media.url!));
-        } else {
-          AppDataStore.clientLogos.add(const ClientItems(imgUrl: "assets/photos/img1.png"));
-        }
-      }
-      _mediaItems.clear();
+      _isLoading = true;
     });
 
-    widget.onDataChanged();
-    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Client entries updated!")));
+    try {
+      for (var media in _mediaItems) {
+        // Extract bytes from MediaItem (handles both web bytes and file system bytes)
+        final List<int>? imageBytes = media.bytes;
+
+        final response = await OperationsApi.addClient(
+          imageUrl: media.url,
+          imageBytes: imageBytes,
+        );
+
+        if (response['status'] == 'success') {
+          final uploadedUrl = response['img_url'] ?? response['image_url'] ?? media.url ?? '';
+
+          setState(() {
+            AppDataStore.clientLogos.add(
+              ClientItems(
+                id: response['id']?.toString() ?? '',
+                imgUrl: uploadedUrl,
+              ),
+            );
+          });
+        } else {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text(response['message'] ?? "Failed to save logo")),
+            );
+          }
+        }
+      }
+
+      _mediaItems.clear();
+      widget.onDataChanged();
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text("Client logo(s) updated successfully!")),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("Error saving clients: $e")),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
+    }
   }
 
-  void _deleteClient(int index) {
+  void _deleteClient(String id, int index) {
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -1355,13 +1508,16 @@ class _ClientDomainManagerState extends State<ClientDomainManager> {
         actions: [
           TextButton(onPressed: () => Navigator.pop(ctx), child: const Text("CANCEL")),
           TextButton(
-            onPressed: () {
-              setState(() {
-                AppDataStore.clientLogos.removeAt(index);
-              });
-              widget.onDataChanged();
-              Navigator.pop(ctx);
-              ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Client logo deleted!")));
+            onPressed: () async {
+              bool success = await OperationsApi.deleteClient(id);
+              if (success && mounted) {
+                setState(() {
+                  AppDataStore.clientLogos.removeAt(index);
+                });
+                widget.onDataChanged();
+                Navigator.pop(ctx);
+                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Client logo deleted!")));
+              }
             },
             child: const Text("DELETE", style: TextStyle(color: Colors.redAccent)),
           ),
@@ -1414,14 +1570,20 @@ class _ClientDomainManagerState extends State<ClientDomainManager> {
                   width: double.infinity,
                   height: 48,
                   child: ElevatedButton(
-                    onPressed: _addClients,
+                    onPressed: _isLoading ? null : _addClients,
                     style: ElevatedButton.styleFrom(
                       backgroundColor: AdminTheme.primaryDark,
                       foregroundColor: Colors.white,
                       elevation: 2,
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                     ),
-                    child: Text("SAVE CLIENT LOGOS", style: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.bold, fontSize: 13, letterSpacing: 0.8)),
+                    child: _isLoading
+                        ? const SizedBox(
+                      width: 20,
+                      height: 20,
+                      child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
+                    )
+                        : Text("SAVE CLIENT LOGOS", style: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.bold, fontSize: 13, letterSpacing: 0.8)),
                   ),
                 )
               ],
@@ -1481,7 +1643,7 @@ class _ClientDomainManagerState extends State<ClientDomainManager> {
                           top: 6,
                           right: 6,
                           child: GestureDetector(
-                            onTap: () => _deleteClient(idx),
+                            onTap: () => _deleteClient(item.id, idx),
                             child: const CircleAvatar(
                               radius: 12,
                               backgroundColor: Colors.redAccent,

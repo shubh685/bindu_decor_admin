@@ -1,4 +1,5 @@
 class DecorProductItem {
+  final String id;
   final String title;
   final String category;
   final List<ImageDetail>? imageDetails;
@@ -8,6 +9,7 @@ class DecorProductItem {
   final String? printType;
 
   const DecorProductItem({
+    this.id = '',
     required this.title,
     this.category = "HOME DECOR",
     this.imageDetails,
@@ -16,6 +18,19 @@ class DecorProductItem {
     this.material = "Premium Grade Material",
     this.printType = "High Definition Digital Print / Finish",
   });
+
+  factory DecorProductItem.fromMap(Map<String, dynamic> map) {
+    String img = map['image_url'] ?? map['img_url'] ?? '';
+    return DecorProductItem(
+      id: map['id']?.toString() ?? '',
+      title: map['title'] ?? '',
+      category: map['category'] ?? 'HOME DECOR',
+      imageUrls: img.isNotEmpty ? [img] : [],
+      description: map['description'] ?? '',
+      material: map['material'] ?? 'Premium Grade Material',
+      printType: map['print_type'] ?? 'High Definition Digital Print / Finish',
+    );
+  }
 }
 
 class ImageDetail {
@@ -31,8 +46,20 @@ class ImageDetail {
 }
 
 class ClientItems {
+  final String id;
   final String imgUrl;
-  const ClientItems({required this.imgUrl});
+
+  const ClientItems({
+    this.id = '',
+    required this.imgUrl,
+  });
+
+  factory ClientItems.fromMap(Map<String, dynamic> map) {
+    return ClientItems(
+      id: map['id']?.toString() ?? '',
+      imgUrl: map['img_url'] ?? map['image_url'] ?? '',
+    );
+  }
 }
 
 class ProjectItem {
@@ -64,22 +91,21 @@ class ProjectItem {
     required this.imageUrls,
   });
 
-  // Factory constructor for MySQL response parsing
   factory ProjectItem.fromMap(Map<String, dynamic> map) {
     String image = map['image_url'] ?? map['imageUrl'] ?? '';
     return ProjectItem(
       id: map['id']?.toString() ?? '',
       title: map['title'] ?? '',
-      subTitle: map['sub_title']  ?? '',
+      subTitle: map['sub_title'] ?? '',
       location: map['location'] ?? '',
       tags: [],
       pricing: map['pricing'] ?? '',
       bhk: map['bhk'] ?? '',
       scope: map['scope'] ?? '',
-      propertyType: map['property_type'] ??  '',
+      propertyType: map['property_type'] ?? '',
       size: map['size'] ?? '',
       description: map['description'] ?? '',
-      imageUrls: map['image_url'] ?? '',
+      imageUrls: image.isNotEmpty ? [image] : [],
     );
   }
 
