@@ -1,6 +1,11 @@
+// Refactored AdminDashboard.dart - Full Web, Desktop, and Mobile Compatibility
+// Works with the updated PHP APIs that proxy external http/https images.
+
+import 'dart:typed_data';
+
 import 'package:bindu_decor_admin/Api/Operations.dart';
 import 'package:file_picker/file_picker.dart';
-import 'package:flutter/foundation.dart';
+import 'package:flutter/foundation.dart'; // Provides kIsWeb & defaultTargetPlatform
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:image_picker/image_picker.dart';
@@ -23,62 +28,46 @@ class AdminTheme {
 // ==========================================
 // UNIFIED MEDIA DATA MODEL
 // ==========================================
+// ==========================================
+// ENHANCED MEDIA DATA MODEL
+// ==========================================
+// ==========================================
+// ENHANCED MEDIA DATA MODEL
+// ==========================================
 class MediaItem {
   final String? url;
   final Uint8List? bytes;
+  final String? fileName;
+  final bool isLocalFile; // Flag to distinguish local uploaded files
 
-  const MediaItem({this.url, this.bytes});
+  const MediaItem({
+    this.url,
+    this.bytes,
+    this.fileName,
+    this.isLocalFile = false,
+  });
 
-  bool get isWebUrl => url != null && (url!.startsWith('http://') || url!.startsWith('https://'));
+  bool get isWebUrl =>
+      url != null && (url!.startsWith('http://') || url!.startsWith('https://'));
+
   bool get isAsset => url != null && url!.startsWith('assets/');
-  bool get hasBytes => bytes != null;
-}
+  bool get hasBytes => bytes != null && bytes!.isNotEmpty;
 
-Widget buildUniversalImage(MediaItem media, {BoxFit fit = BoxFit.cover}) {
-  if (media.hasBytes) {
-    return Image.memory(
-      media.bytes!,
-      fit: fit,
-      errorBuilder: (c, e, s) => const Icon(Icons.broken_image, color: Colors.grey),
-    );
+  // Check if this is a local uploaded file (stored in uploads/ directory)
+  bool get isLocalUpload =>
+      url != null && (url!.startsWith('uploads/') || url!.contains('/uploads/'));
+
+  // Get the actual image source for display
+  String get displayUrl {
+    if (url == null) return '';
+    if (url!.startsWith('//')) return 'https:${url!}';
+    if (!url!.startsWith('http://') &&
+        !url!.startsWith('https://') &&
+        !url!.startsWith('assets/')) {
+      return 'https://$url';
+    }
+    return url!;
   }
-
-  String path = media.url?.trim() ?? '';
-  if (path.isEmpty) {
-    return Container(
-      color: const Color(0xFFF2F2F2),
-      child: const Center(child: Icon(Icons.image_not_supported, color: Colors.grey, size: 32)),
-    );
-  }
-
-  // Handle http/https prefix conversion safely
-  if (media.isWebUrl) {
-    return Image.network(
-      path,
-      fit: fit,
-      errorBuilder: (c, e, s) => const Icon(Icons.broken_image, color: Colors.grey),
-    );
-  }
-
-  if (media.isAsset) {
-    return Image.asset(
-      path,
-      fit: fit,
-      errorBuilder: (c, e, s) => const Icon(Icons.broken_image, color: Colors.grey),
-    );
-  }
-
-  // Fallback rendering for relative server paths
-  if (!path.startsWith('http')) {
-    path = "${OperationsApi.baseUrl}/$path".replaceAll(RegExp(r'(?<!:)/{2,}'), '/');
-    return Image.network(
-      path,
-      fit: fit,
-      errorBuilder: (c, e, s) => const Icon(Icons.broken_image, color: Colors.grey),
-    );
-  }
-
-  return const Icon(Icons.image, color: Colors.grey);
 }
 
 // ==========================================
@@ -86,12 +75,151 @@ Widget buildUniversalImage(MediaItem media, {BoxFit fit = BoxFit.cover}) {
 // ==========================================
 class AppDataStore {
   static final List<ClientItems> clientLogos = [];
-
   static final List<ProjectItem> projects = [];
-
   static final List<DecorProductItem> products = [];
 }
 
+// ==========================================
+// CROSS-PLATFORM SAFE IMAGE RENDERER
+// ==========================================
+// ==========================================
+// CROSS-PLATFORM SAFE IMAGE RENDERER (FIXED)
+// ==========================================
+Widget buildUniversalImage(
+    MediaItem media, {
+      BoxFit fit = BoxFit.cover,
+      double? width,
+      double? height,
+    }) {
+  // PRIORITY 1: If we have bytes (file picked), use Image.memory
+  if (media.hasBytes) {
+    return Image.memory(
+      media.bytes!,
+      fit: fit,
+      width: width,
+      height: height,
+      gaplessPlayback: true,
+      errorBuilder: (context, error, stackTrace) => _buildImageErrorWidget(),
+    );
+  }
+
+  String raw = media.url?.trim() ?? '';
+  if (raw.isEmpty) return _buildImageErrorWidget();
+
+  // PRIORITY 2: Handle local uploaded files (uploads/ directory)
+  if (media.isLocalUpload) {
+    // For local files, we need to use the API proxy or direct file access
+    // The PHP backend serves these through the proxy system
+    String proxyUrl = raw;
+
+    // If it's a relative path, convert to full URL through proxy
+    if (!raw.startsWith('http://') && !raw.startsWith('https://') && !raw.startsWith('assets/')) {
+      // Use the proxy endpoint for local files
+      proxyUrl = '/${raw.replaceFirst('uploads/', 'uploads/')}';
+    }
+
+    return Image.network(
+      proxyUrl,
+      fit: fit,
+      width: width,
+      height: height,
+      gaplessPlayback: true,
+      headers: const {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+        'Accept': 'image/webp,image/apng,image/*,*/*;q=0.8',
+      },
+      loadingBuilder: (context, child, progress) {
+        if (progress == null) return child;
+        return const Center(
+          child: SizedBox(
+            width: 22,
+            height: 22,
+            child: CircularProgressIndicator(strokeWidth: 2),
+          ),
+        );
+      },
+      errorBuilder: (context, error, stackTrace) {
+        debugPrint('Local image load error: $raw -> $error');
+        return _buildImageErrorWidget();
+      },
+    );
+  }
+
+  // PRIORITY 3: External web URLs
+  if (media.isWebUrl || raw.startsWith('http://') || raw.startsWith('https://')) {
+    return Image.network(
+      raw,
+      fit: fit,
+      width: width,
+      height: height,
+      gaplessPlayback: true,
+      headers: const {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+        'Accept': 'image/webp,image/apng,image/*,*/*;q=0.8',
+      },
+      loadingBuilder: (context, child, progress) {
+        if (progress == null) return child;
+        return const Center(
+          child: SizedBox(
+            width: 22,
+            height: 22,
+            child: CircularProgressIndicator(strokeWidth: 2),
+          ),
+        );
+      },
+      errorBuilder: (context, error, stackTrace) {
+        debugPrint('Network image load error: $raw -> $error');
+        // Try fallback with HTTPS if HTTP fails
+        if (raw.startsWith('http://')) {
+          final httpsUrl = raw.replaceFirst('http://', 'https://');
+          return Image.network(
+            httpsUrl,
+            fit: fit,
+            width: width,
+            height: height,
+            gaplessPlayback: true,
+            errorBuilder: (ctx, err, stack) => _buildImageErrorWidget(),
+          );
+        }
+        return _buildImageErrorWidget();
+      },
+    );
+  }
+
+  // PRIORITY 4: Asset images
+  if (raw.startsWith('assets/')) {
+    return Image.asset(
+      raw,
+      fit: fit,
+      width: width,
+      height: height,
+      errorBuilder: (context, error, stackTrace) => _buildImageErrorWidget(),
+    );
+  }
+
+  // Fallback: Try as network image with auto-fix
+  return Image.network(
+    raw.startsWith('//') ? 'https:$raw' : 'https://$raw',
+    fit: fit,
+    width: width,
+    height: height,
+    gaplessPlayback: true,
+    errorBuilder: (context, error, stackTrace) => _buildImageErrorWidget(),
+  );
+}
+
+Widget _buildImageErrorWidget() {
+  return Container(
+    color: const Color(0xFFF2F2F2),
+    child: const Center(
+      child: Icon(
+        Icons.image_not_supported_rounded,
+        color: Colors.grey,
+        size: 32,
+      ),
+    ),
+  );
+}
 
 // ==========================================
 // MAIN ADMIN DASHBOARD
@@ -103,13 +231,40 @@ class AdminDashboard extends StatefulWidget {
   State<AdminDashboard> createState() => _AdminDashboardState();
 }
 
-class _AdminDashboardState extends State<AdminDashboard> with SingleTickerProviderStateMixin {
+class _AdminDashboardState extends State<AdminDashboard>
+    with SingleTickerProviderStateMixin {
   late TabController _tabController;
 
   @override
   void initState() {
     super.initState();
     _tabController = TabController(length: 4, vsync: this);
+
+    // Load all data from server once on dashboard creation
+    _loadAllData();
+  }
+
+  Future<void> _loadAllData() async {
+    try {
+      final serverProjects = await OperationsApi.fetchProjects();
+      final serverProducts = await OperationsApi.fetchProducts();
+      final serverClients = await OperationsApi.fetchClients();
+
+      if (!mounted) return;
+
+      setState(() {
+        AppDataStore.projects.clear();
+        AppDataStore.projects.addAll(serverProjects);
+
+        AppDataStore.products.clear();
+        AppDataStore.products.addAll(serverProducts);
+
+        AppDataStore.clientLogos.clear();
+        AppDataStore.clientLogos.addAll(serverClients);
+      });
+    } catch (e) {
+      debugPrint('Failed to load initial data: $e');
+    }
   }
 
   @override
@@ -119,6 +274,7 @@ class _AdminDashboardState extends State<AdminDashboard> with SingleTickerProvid
   }
 
   void _refreshDashboard() {
+    // Re-sync counts and UI by re-building (optionally re-fetch if needed)
     setState(() {});
   }
 
@@ -139,10 +295,19 @@ class _AdminDashboardState extends State<AdminDashboard> with SingleTickerProvid
                 shape: BoxShape.circle,
                 border: Border.all(color: AdminTheme.primaryAccent, width: 1.5),
               ),
-              child: const Icon(Icons.shield_outlined, color: AdminTheme.primaryAccent, size: 20),
+              child: const Icon(Icons.shield_outlined,
+                  color: AdminTheme.primaryAccent, size: 20),
             ),
             const SizedBox(width: 12),
-            Text("Admin Management Portal", style: GoogleFonts.aleo(fontWeight: FontWeight.bold, fontSize: 20, letterSpacing: 1.0, color: Colors.white)),
+            Text(
+              "Admin Management Portal",
+              style: GoogleFonts.aleo(
+                fontWeight: FontWeight.bold,
+                fontSize: 20,
+                letterSpacing: 1.0,
+                color: Colors.white,
+              ),
+            ),
           ],
         ),
         bottom: TabBar(
@@ -151,8 +316,10 @@ class _AdminDashboardState extends State<AdminDashboard> with SingleTickerProvid
           indicatorWeight: 3,
           labelColor: AdminTheme.primaryAccent,
           unselectedLabelColor: Colors.white70,
-          labelStyle: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.bold, fontSize: 13),
-          unselectedLabelStyle: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.w500, fontSize: 13),
+          labelStyle:
+          GoogleFonts.plusJakartaSans(fontWeight: FontWeight.bold, fontSize: 13),
+          unselectedLabelStyle:
+          GoogleFonts.plusJakartaSans(fontWeight: FontWeight.w500, fontSize: 13),
           tabs: const [
             Tab(icon: Icon(Icons.dashboard_rounded), text: "Overview"),
             Tab(icon: Icon(Icons.apartment_rounded), text: "Projects"),
@@ -173,7 +340,8 @@ class _AdminDashboardState extends State<AdminDashboard> with SingleTickerProvid
                   color: Colors.white.withOpacity(0.1),
                   border: Border.all(color: AdminTheme.primaryAccent.withOpacity(0.4)),
                 ),
-                child: const Icon(Icons.logout_rounded, size: 18, color: AdminTheme.primaryAccent),
+                child: const Icon(Icons.logout_rounded,
+                    size: 18, color: AdminTheme.primaryAccent),
               ),
             ),
           )
@@ -217,9 +385,12 @@ class OverviewDomainManager extends StatelessWidget {
               Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text("System Summary Overview", style: GoogleFonts.aleo(fontSize: 22, fontWeight: FontWeight.bold, color: AdminTheme.primaryDark)),
+                  Text("System Summary Overview",
+                      style: GoogleFonts.aleo(
+                          fontSize: 22, fontWeight: FontWeight.bold, color: AdminTheme.primaryDark)),
                   const SizedBox(height: 4),
-                  Text("Live metrics and control dashboard", style: GoogleFonts.plusJakartaSans(fontSize: 13, color: Colors.grey.shade600,)),
+                  Text("Live metrics and control dashboard",
+                      style: GoogleFonts.plusJakartaSans(fontSize: 13, color: Colors.grey.shade600)),
                 ],
               ),
             ],
@@ -240,11 +411,14 @@ class OverviewDomainManager extends StatelessWidget {
               }
               return Row(
                 children: [
-                  Expanded(child: _buildCountCard("Projects", projectCount, Icons.apartment_rounded, const Color(0xFF1E88E5), () => onNavigateToTab(1))),
+                  Expanded(
+                      child: _buildCountCard("Projects", projectCount, Icons.apartment_rounded, const Color(0xFF1E88E5), () => onNavigateToTab(1))),
                   const SizedBox(width: 16),
-                  Expanded(child: _buildCountCard("Products", productCount, Icons.category_rounded, const Color(0xFFFB8C00), () => onNavigateToTab(2))),
+                  Expanded(
+                      child: _buildCountCard("Products", productCount, Icons.category_rounded, const Color(0xFFFB8C00), () => onNavigateToTab(2))),
                   const SizedBox(width: 16),
-                  Expanded(child: _buildCountCard("Clients", clientCount, Icons.people_alt_rounded, const Color(0xFF43A047), () => onNavigateToTab(3))),
+                  Expanded(
+                      child: _buildCountCard("Clients", clientCount, Icons.people_alt_rounded, const Color(0xFF43A047), () => onNavigateToTab(3))),
                 ],
               );
             },
@@ -271,8 +445,12 @@ class OverviewDomainManager extends StatelessWidget {
                     ),
                     child: const Icon(Icons.apartment_rounded, color: AdminTheme.primaryDark),
                   ),
-                  title: Text(item.title, style: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.bold, fontSize: 14), maxLines: 1, overflow: TextOverflow.ellipsis),
-                  subtitle: Text("${item.location} • ${item.pricing}", style: GoogleFonts.plusJakartaSans(fontSize: 12, color: Colors.grey.shade600)),
+                  title: Text(item.title,
+                      style: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.bold, fontSize: 14),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis),
+                  subtitle: Text("${item.location} • ${item.pricing}",
+                      style: GoogleFonts.plusJakartaSans(fontSize: 12, color: Colors.grey.shade600)),
                 );
               },
             ),
@@ -299,8 +477,12 @@ class OverviewDomainManager extends StatelessWidget {
                     ),
                     child: const Icon(Icons.category_rounded, color: AdminTheme.secondaryAccent),
                   ),
-                  title: Text(item.title, style: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.bold, fontSize: 14), maxLines: 1, overflow: TextOverflow.ellipsis),
-                  subtitle: Text(item.category, style: GoogleFonts.plusJakartaSans(fontSize: 12, color: Colors.grey.shade600)),
+                  title: Text(item.title,
+                      style: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.bold, fontSize: 14),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis),
+                  subtitle: Text(item.category,
+                      style: GoogleFonts.plusJakartaSans(fontSize: 12, color: Colors.grey.shade600)),
                 );
               },
             ),
@@ -342,8 +524,10 @@ class OverviewDomainManager extends StatelessWidget {
             Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(count.toString(), style: GoogleFonts.alexandria(fontSize: 26, fontWeight: FontWeight.bold, color: AdminTheme.primaryDark),),
-                Text(label, style: GoogleFonts.aleo(fontSize: 13, fontWeight: FontWeight.w600, color: Colors.grey.shade600),),
+                Text(count.toString(),
+                    style: GoogleFonts.alexandria(fontSize: 26, fontWeight: FontWeight.bold, color: AdminTheme.primaryDark)),
+                Text(label,
+                    style: GoogleFonts.aleo(fontSize: 13, fontWeight: FontWeight.w600, color: Colors.grey.shade600)),
               ],
             ),
           ],
@@ -352,7 +536,12 @@ class OverviewDomainManager extends StatelessWidget {
     );
   }
 
-  Widget _buildSummarySection({required String title, required int itemCount, required VoidCallback onViewAll, required Widget child}) {
+  Widget _buildSummarySection({
+    required String title,
+    required int itemCount,
+    required VoidCallback onViewAll,
+    required Widget child,
+  }) {
     return Container(
       decoration: BoxDecoration(
         color: Colors.white,
@@ -374,10 +563,12 @@ class OverviewDomainManager extends StatelessWidget {
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Text("$title ($itemCount)", style: GoogleFonts.aleo(fontSize: 16, fontWeight: FontWeight.bold, color: AdminTheme.primaryDark),),
+                Text("$title ($itemCount)",
+                    style: GoogleFonts.aleo(fontSize: 16, fontWeight: FontWeight.bold, color: AdminTheme.primaryDark)),
                 TextButton(
                   onPressed: onViewAll,
-                  child: Text("Manage All", style: GoogleFonts.plusJakartaSans(color: AdminTheme.secondaryAccent, fontWeight: FontWeight.bold, fontSize: 12),),
+                  child: Text("Manage All",
+                      style: GoogleFonts.plusJakartaSans(color: AdminTheme.secondaryAccent, fontWeight: FontWeight.bold, fontSize: 12)),
                 ),
               ],
             ),
@@ -419,15 +610,22 @@ class MediaPickerWidget extends StatelessWidget {
     required this.onRemoveMedia,
   });
 
+  // Replaced dart:io Platform checks with cross-platform defaultTargetPlatform
   bool get _shouldShowCameraButton {
-    if (kIsWeb) {
-      return defaultTargetPlatform == TargetPlatform.android || defaultTargetPlatform == TargetPlatform.iOS;
-    }
-    return defaultTargetPlatform == TargetPlatform.android || defaultTargetPlatform == TargetPlatform.iOS;
+    if (kIsWeb) return false;
+    return defaultTargetPlatform == TargetPlatform.android ||
+        defaultTargetPlatform == TargetPlatform.iOS;
   }
 
   Future<bool> _requestPermission(Permission permission, BuildContext context) async {
     if (kIsWeb) return true;
+
+    // Desktop platforms don't use permission_handler
+    if (defaultTargetPlatform == TargetPlatform.windows ||
+        defaultTargetPlatform == TargetPlatform.macOS ||
+        defaultTargetPlatform == TargetPlatform.linux) {
+      return true;
+    }
 
     final status = await permission.status;
     if (status.isGranted) return true;
@@ -450,23 +648,36 @@ class MediaPickerWidget extends StatelessWidget {
   }
 
   Future<void> _pickFiles(BuildContext context) async {
-    Permission storagePermission = Permission.photos;
-
-    bool granted = await _requestPermission(storagePermission, context);
-    if (!granted && !kIsWeb) return;
+    if (!kIsWeb &&
+        (defaultTargetPlatform == TargetPlatform.android || defaultTargetPlatform == TargetPlatform.iOS)) {
+      bool granted = await _requestPermission(Permission.photos, context);
+      if (!granted) return;
+    }
 
     FilePickerResult? result = await FilePicker.pickFiles(
       type: FileType.image,
       allowMultiple: true,
-      withData: true,
+      withData: true, // Crucial for memory bytes on Web & Desktop
     );
 
     if (result != null) {
-      final List<MediaItem> items = result.files
-          .where((f) => f.bytes != null)
-          .map((f) => MediaItem(bytes: f.bytes))
-          .toList();
-      onMediaAdded(items);
+      List<MediaItem> items = [];
+      for (var f in result.files) {
+        Uint8List? fileBytes = f.bytes;
+
+        if (fileBytes != null && fileBytes.isNotEmpty) {
+          items.add(
+            MediaItem(
+              bytes: fileBytes,
+              fileName: f.name,
+            ),
+          );
+        }
+      }
+
+      if (items.isNotEmpty) {
+        onMediaAdded(items);
+      }
     }
   }
 
@@ -483,7 +694,12 @@ class MediaPickerWidget extends StatelessWidget {
 
       if (photo != null) {
         final bytes = await photo.readAsBytes();
-        onMediaAdded([MediaItem(bytes: bytes)]);
+        onMediaAdded([
+          MediaItem(
+            bytes: bytes,
+            fileName: photo.name,
+          ),
+        ]);
       }
     } catch (e) {
       if (context.mounted) {
@@ -499,14 +715,8 @@ class MediaPickerWidget extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          "Media Attachment (Optional)",
-          style: GoogleFonts.plusJakartaSans(
-            fontSize: 13,
-            fontWeight: FontWeight.bold,
-            color: AdminTheme.primaryDark,
-          ),
-        ),
+        Text("Media Attachment (Optional)",
+            style: GoogleFonts.plusJakartaSans(fontSize: 13, fontWeight: FontWeight.bold, color: AdminTheme.primaryDark)),
         const SizedBox(height: 8),
         Row(
           children: [
@@ -643,7 +853,6 @@ class _ProjectDomainManagerState extends State<ProjectDomainManager> {
 
   bool _isLoading = false;
 
-  // Property Type state & options
   String _selectedPropertyType = 'Apartment';
   final List<String> _propertyTypeOptions = [
     'Apartment',
@@ -655,7 +864,6 @@ class _ProjectDomainManagerState extends State<ProjectDomainManager> {
     'Commercial'
   ];
 
-  // Interior Scope state & options
   String _selectedScope = 'Full Interior';
   final List<String> _scopeOptions = [
     'Full Interior',
@@ -671,7 +879,27 @@ class _ProjectDomainManagerState extends State<ProjectDomainManager> {
 
   final List<MediaItem> _mediaItems = [];
 
-  // COMPLETE ADD PROJECT METHOD
+  @override
+  void initState() {
+    super.initState();
+    _loadProjectsFromServer();
+  }
+
+  Future<void> _loadProjectsFromServer() async {
+    try {
+      final serverProjects = await OperationsApi.fetchProjects();
+      if (mounted) {
+        setState(() {
+          AppDataStore.projects.clear();
+          AppDataStore.projects.addAll(serverProjects);
+        });
+        widget.onDataChanged();
+      }
+    } catch (e) {
+      debugPrint('Failed to load projects: $e');
+    }
+  }
+
   Future<void> _addProject() async {
     if (_title.text.trim().isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -701,47 +929,48 @@ class _ProjectDomainManagerState extends State<ProjectDomainManager> {
         externalUrl = "https://images.unsplash.com/photo-1618221195710-dd6b41faaea6?w=800";
       }
 
-      // Map fields strictly matching backend and database column naming
       final Map<String, String> fields = {
         "title": _title.text.trim(),
-        "sub_title": _subTitle.text.trim().isEmpty ? "Featured Residence" : _subTitle.text.trim(),
+        "subTitle": _subTitle.text.trim().isEmpty ? "Featured Residence" : _subTitle.text.trim(),
         "location": _location.text.trim().isEmpty ? "Mumbai" : _location.text.trim(),
         "pricing": _pricing.text.trim().isEmpty ? "N/A" : _pricing.text.trim(),
         "bhk": _bhk.text.trim().isEmpty ? "3-BHK" : _bhk.text.trim(),
         "scope": _selectedScope,
-        "property_type": _selectedPropertyType,
+        "propertyType": _selectedPropertyType,
         "size": _size.text.trim().isEmpty ? "2000 sq ft" : _size.text.trim(),
         "description": _description.text.trim().isEmpty ? "No description provided." : _description.text.trim(),
-        "image_url": externalUrl,
+        "imageUrl": externalUrl,
       };
 
       final response = await OperationsApi.addProject(
         fields: fields,
         imageBytes: rawBytes,
+        imageFileName: _mediaItems.isNotEmpty ? _mediaItems.first.fileName : null,
       );
 
       if (!mounted) return;
 
       if (response['status'] == 'success') {
-        String finalImageUrl = response['image_url'] ?? externalUrl;
+        final String finalImageUrl = (response['image_url'] ?? response['imageUrl'] ?? externalUrl).toString().trim();
 
+        // Immediately update dynamic state with memory bytes if direct URL is not available
         AppDataStore.projects.add(
-          ProjectItem.fromMap({
-            "id": response['id']?.toString() ?? DateTime.now().millisecondsSinceEpoch.toString(),
-            "title": fields["title"],
-            "sub_title": fields["sub_title"],
-            "location": fields["location"],
-            "pricing": fields["pricing"],
-            "bhk": fields["bhk"],
-            "scope": fields["scope"],
-            "property_type": fields["property_type"],
-            "size": fields["size"],
-            "description": fields["description"],
-            "image_url": finalImageUrl,
-          }),
+          ProjectItem(
+            id: response['id']?.toString() ?? DateTime.now().millisecondsSinceEpoch.toString(),
+            title: fields["title"]!,
+            subTitle: fields["subTitle"]!,
+            location: fields["location"]!,
+            tags: const <String>[],
+            pricing: fields["pricing"]!,
+            bhk: fields["bhk"]!,
+            scope: fields["scope"]!,
+            propertyType: fields["propertyType"]!,
+            size: fields["size"]!,
+            description: fields["description"]!,
+            imageUrls: finalImageUrl.isNotEmpty ? [finalImageUrl] : <String>[],
+          ),
         );
 
-        _mediaItems.clear();
         _title.clear();
         _subTitle.clear();
         _location.clear();
@@ -751,6 +980,8 @@ class _ProjectDomainManagerState extends State<ProjectDomainManager> {
         _selectedScope = 'Full Interior';
         _size.clear();
         _description.clear();
+        _mediaItems.clear();
+        _urlController.clear();
 
         widget.onDataChanged();
         ScaffoldMessenger.of(context).showSnackBar(
@@ -839,11 +1070,7 @@ class _ProjectDomainManagerState extends State<ProjectDomainManager> {
               borderRadius: BorderRadius.circular(16),
               border: Border.all(color: Colors.grey.shade200),
               boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withOpacity(0.03),
-                  blurRadius: 15,
-                  offset: const Offset(0, 5),
-                ),
+                BoxShadow(color: Colors.black.withOpacity(0.03), blurRadius: 15, offset: const Offset(0, 5)),
               ],
             ),
             padding: const EdgeInsets.all(24),
@@ -953,11 +1180,7 @@ class _ProjectDomainManagerState extends State<ProjectDomainManager> {
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                     ),
                     child: _isLoading
-                        ? const SizedBox(
-                      width: 20,
-                      height: 20,
-                      child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
-                    )
+                        ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
                         : Text("PUBLISH PROJECT", style: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.bold, fontSize: 13, letterSpacing: 0.8)),
                   ),
                 )
@@ -971,11 +1194,7 @@ class _ProjectDomainManagerState extends State<ProjectDomainManager> {
               borderRadius: BorderRadius.circular(16),
               border: Border.all(color: Colors.grey.shade200),
               boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withOpacity(0.03),
-                  blurRadius: 15,
-                  offset: const Offset(0, 5),
-                ),
+                BoxShadow(color: Colors.black.withOpacity(0.03), blurRadius: 15, offset: const Offset(0, 5)),
               ],
             ),
             padding: const EdgeInsets.all(20),
@@ -996,53 +1215,24 @@ class _ProjectDomainManagerState extends State<ProjectDomainManager> {
                   separatorBuilder: (context, index) => const Divider(height: 1),
                   itemBuilder: (context, idx) {
                     final item = AppDataStore.projects[idx];
+                    final String displayUrl = item.imageUrls.isNotEmpty ? item.imageUrls.first : '';
 
                     return ListTile(
                       contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                       leading: Container(
                         width: 50,
                         height: 50,
-                        decoration: BoxDecoration(
+                        decoration: BoxDecoration(borderRadius: BorderRadius.circular(8)),
+                        child: ClipRRect(
                           borderRadius: BorderRadius.circular(8),
-                          image: item.imageUrls.isNotEmpty
-                              ? DecorationImage(
-                            image: NetworkImage(item.imageUrls.first),
-                            fit: BoxFit.cover,
-                          )
-                              : null,
-                        ),
-                        child: item.imageUrls.isEmpty
-                            ? const Icon(
-                          Icons.apartment_rounded,
-                          color: AdminTheme.primaryDark,
-                        )
-                            : null,
-                      ),
-                      title: Text(
-                        item.title,
-                        style: GoogleFonts.plusJakartaSans(
-                          fontWeight: FontWeight.bold,
-                          fontSize: 14,
-                        ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                      subtitle: Text(
-                        "${item.propertyType} • ${item.location} • ${item.pricing}",
-                        style: GoogleFonts.plusJakartaSans(
-                          fontSize: 12,
-                          color: Colors.grey.shade600,
+                          child: buildUniversalImage(MediaItem(url: displayUrl)),
                         ),
                       ),
+                      title: Text(item.title, style: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.bold, fontSize: 14), maxLines: 1, overflow: TextOverflow.ellipsis),
+                      subtitle: Text("${item.propertyType} • ${item.location} • ${item.pricing}", style: GoogleFonts.plusJakartaSans(fontSize: 12, color: Colors.grey.shade600)),
                       trailing: IconButton(
-                        icon: const Icon(
-                          Icons.delete_outline_rounded,
-                          color: Colors.redAccent,
-                        ),
-                        onPressed: () => _deleteProject(
-                          item.id.toString(),
-                          idx,
-                        ),
+                        icon: const Icon(Icons.delete_outline_rounded, color: Colors.redAccent),
+                        onPressed: () => _deleteProject(item.id.toString(), idx),
                       ),
                     );
                   },
@@ -1079,8 +1269,18 @@ class _ProductDomainManagerState extends State<ProductDomainManager> {
 
   String _selectedCategory = 'Wallpapers';
   final List<String> _categories = [
-    'Wallpapers', 'Floorings', 'Carpets', 'Blinds', 'Glass Films', 'Artificial Turfs',
-    'Gym Floorings', 'Awnings', 'Mosquito Nets', 'Upholstery', 'Curtains', 'Stretch Ceiling'
+    'Wallpapers',
+    'Floorings',
+    'Carpets',
+    'Blinds',
+    'Glass Films',
+    'Artificial Turfs',
+    'Gym Floorings',
+    'Awnings',
+    'Mosquito Nets',
+    'Upholstery',
+    'Curtains',
+    'Stretch Ceiling'
   ];
   final List<MediaItem> _mediaItems = [];
 
@@ -1091,13 +1291,17 @@ class _ProductDomainManagerState extends State<ProductDomainManager> {
   }
 
   Future<void> _loadProductsFromServer() async {
-    final serverProducts = await OperationsApi.fetchProducts();
-    if (mounted) {
-      setState(() {
-        AppDataStore.products.clear();
-        AppDataStore.products.addAll(serverProducts);
-      });
-      widget.onDataChanged();
+    try {
+      final serverProducts = await OperationsApi.fetchProducts();
+      if (mounted) {
+        setState(() {
+          AppDataStore.products.clear();
+          AppDataStore.products.addAll(serverProducts);
+        });
+        widget.onDataChanged();
+      }
+    } catch (e) {
+      debugPrint('Failed to load products: $e');
     }
   }
 
@@ -1138,12 +1342,13 @@ class _ProductDomainManagerState extends State<ProductDomainManager> {
       final response = await OperationsApi.addProduct(
         fields: fields,
         imageBytes: rawBytes,
+        imageFileName: _mediaItems.isNotEmpty ? _mediaItems.first.fileName : null,
       );
 
       if (!mounted) return;
 
       if (response['status'] == 'success') {
-        String finalImageUrl = response['image_url'] ?? externalUrl;
+        final String finalImageUrl = (response['image_url'] ?? response['imageUrl'] ?? externalUrl).toString().trim();
 
         AppDataStore.products.add(
           DecorProductItem(
@@ -1157,11 +1362,12 @@ class _ProductDomainManagerState extends State<ProductDomainManager> {
           ),
         );
 
-        _mediaItems.clear();
         _title.clear();
         _description.clear();
         _materialController.text = "Premium Grade Material";
         _printTypeController.text = "High Definition Digital Print / Finish";
+        _mediaItems.clear();
+        _urlController.clear();
 
         widget.onDataChanged();
         ScaffoldMessenger.of(context).showSnackBar(
@@ -1245,18 +1451,7 @@ class _ProductDomainManagerState extends State<ProductDomainManager> {
       child: Column(
         children: [
           Container(
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: Colors.grey.shade200),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withOpacity(0.03),
-                  blurRadius: 15,
-                  offset: const Offset(0, 5),
-                ),
-              ],
-            ),
+            decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(16), border: Border.all(color: Colors.grey.shade200), boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.03), blurRadius: 15, offset: const Offset(0, 5))]),
             padding: const EdgeInsets.all(24),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -1318,18 +1513,9 @@ class _ProductDomainManagerState extends State<ProductDomainManager> {
                   height: 48,
                   child: ElevatedButton(
                     onPressed: _isLoading ? null : _addProduct,
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: AdminTheme.primaryDark,
-                      foregroundColor: Colors.white,
-                      elevation: 2,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                    ),
+                    style: ElevatedButton.styleFrom(backgroundColor: AdminTheme.primaryDark, foregroundColor: Colors.white, elevation: 2, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
                     child: _isLoading
-                        ? const SizedBox(
-                      width: 20,
-                      height: 20,
-                      child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
-                    )
+                        ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
                         : Text("PUBLISH PRODUCT", style: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.bold, fontSize: 13, letterSpacing: 0.8)),
                   ),
                 )
@@ -1338,18 +1524,7 @@ class _ProductDomainManagerState extends State<ProductDomainManager> {
           ),
           const SizedBox(height: 24),
           Container(
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: Colors.grey.shade200),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withOpacity(0.03),
-                  blurRadius: 15,
-                  offset: const Offset(0, 5),
-                ),
-              ],
-            ),
+            decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(16), border: Border.all(color: Colors.grey.shade200), boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.03), blurRadius: 15, offset: const Offset(0, 5))]),
             padding: const EdgeInsets.all(20),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -1357,10 +1532,7 @@ class _ProductDomainManagerState extends State<ProductDomainManager> {
                 Text("Active Products Summary (${AppDataStore.products.length})", style: GoogleFonts.cinzel(fontSize: 16, fontWeight: FontWeight.bold, color: AdminTheme.primaryDark)),
                 const Divider(height: 20),
                 AppDataStore.products.isEmpty
-                    ? Padding(
-                  padding: const EdgeInsets.all(16.0),
-                  child: Center(child: Text("No products available.", style: GoogleFonts.plusJakartaSans(color: Colors.grey))),
-                )
+                    ? Padding(padding: const EdgeInsets.all(16.0), child: Center(child: Text("No products available.", style: GoogleFonts.plusJakartaSans(color: Colors.grey))))
                     : ListView.separated(
                   shrinkWrap: true,
                   physics: const NeverScrollableScrollPhysics(),
@@ -1368,18 +1540,18 @@ class _ProductDomainManagerState extends State<ProductDomainManager> {
                   separatorBuilder: (context, index) => const Divider(height: 1),
                   itemBuilder: (context, idx) {
                     final item = AppDataStore.products[idx];
+                    final String displayUrl = item.imageUrls.isNotEmpty ? item.imageUrls.first : '';
+
                     return ListTile(
                       contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                       leading: Container(
                         width: 50,
                         height: 50,
-                        decoration: BoxDecoration(
+                        decoration: BoxDecoration(borderRadius: BorderRadius.circular(8)),
+                        child: ClipRRect(
                           borderRadius: BorderRadius.circular(8),
-                          image: item.imageUrls.isNotEmpty
-                              ? DecorationImage(image: NetworkImage(item.imageUrls.first), fit: BoxFit.cover)
-                              : null,
+                          child: buildUniversalImage(MediaItem(url: displayUrl)),
                         ),
-                        child: item.imageUrls.isEmpty ? const Icon(Icons.category_rounded, color: AdminTheme.primaryDark) : null,
                       ),
                       title: Text(item.title, style: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.bold, fontSize: 14), maxLines: 1, overflow: TextOverflow.ellipsis),
                       subtitle: Text("${item.category} • ${item.material}", style: GoogleFonts.plusJakartaSans(fontSize: 12, color: Colors.grey.shade600)),
@@ -1423,13 +1595,17 @@ class _ClientDomainManagerState extends State<ClientDomainManager> {
   }
 
   Future<void> _loadClientsFromServer() async {
-    final serverClients = await OperationsApi.fetchClients();
-    if (mounted) {
-      setState(() {
-        AppDataStore.clientLogos.clear();
-        AppDataStore.clientLogos.addAll(serverClients);
-      });
-      widget.onDataChanged();
+    try {
+      final serverClients = await OperationsApi.fetchClients();
+      if (mounted) {
+        setState(() {
+          AppDataStore.clientLogos.clear();
+          AppDataStore.clientLogos.addAll(serverClients);
+        });
+        widget.onDataChanged();
+      }
+    } catch (e) {
+      debugPrint('Failed to load clients: $e');
     }
   }
 
@@ -1447,12 +1623,13 @@ class _ClientDomainManagerState extends State<ClientDomainManager> {
 
     try {
       for (var media in _mediaItems) {
-        // Extract bytes from MediaItem (handles both web bytes and file system bytes)
-        final List<int>? imageBytes = media.bytes;
+        // Cast directly to Uint8List? since MediaItem.bytes is already Uint8List?
+        final Uint8List? imageBytes = media.bytes;
 
         final response = await OperationsApi.addClient(
           imageUrl: media.url,
           imageBytes: imageBytes,
+          imageFileName: media.fileName,
         );
 
         if (response['status'] == 'success') {
@@ -1474,14 +1651,16 @@ class _ClientDomainManagerState extends State<ClientDomainManager> {
           }
         }
       }
-
-      _mediaItems.clear();
       widget.onDataChanged();
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text("Client logo(s) updated successfully!")),
         );
+        setState(() {
+          _mediaItems.clear();
+          _urlController.clear();
+        });
       }
     } catch (e) {
       if (mounted) {
@@ -1533,18 +1712,7 @@ class _ClientDomainManagerState extends State<ClientDomainManager> {
       child: Column(
         children: [
           Container(
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: Colors.grey.shade200),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withOpacity(0.03),
-                  blurRadius: 15,
-                  offset: const Offset(0, 5),
-                ),
-              ],
-            ),
+            decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(16), border: Border.all(color: Colors.grey.shade200), boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.03), blurRadius: 15, offset: const Offset(0, 5))]),
             padding: const EdgeInsets.all(24),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -1571,18 +1739,9 @@ class _ClientDomainManagerState extends State<ClientDomainManager> {
                   height: 48,
                   child: ElevatedButton(
                     onPressed: _isLoading ? null : _addClients,
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: AdminTheme.primaryDark,
-                      foregroundColor: Colors.white,
-                      elevation: 2,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                    ),
+                    style: ElevatedButton.styleFrom(backgroundColor: AdminTheme.primaryDark, foregroundColor: Colors.white, elevation: 2, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
                     child: _isLoading
-                        ? const SizedBox(
-                      width: 20,
-                      height: 20,
-                      child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
-                    )
+                        ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
                         : Text("SAVE CLIENT LOGOS", style: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.bold, fontSize: 13, letterSpacing: 0.8)),
                   ),
                 )
@@ -1591,18 +1750,7 @@ class _ClientDomainManagerState extends State<ClientDomainManager> {
           ),
           const SizedBox(height: 24),
           Container(
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: Colors.grey.shade200),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withOpacity(0.03),
-                  blurRadius: 15,
-                  offset: const Offset(0, 5),
-                ),
-              ],
-            ),
+            decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(16), border: Border.all(color: Colors.grey.shade200), boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.03), blurRadius: 15, offset: const Offset(0, 5))]),
             padding: const EdgeInsets.all(20),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -1610,33 +1758,25 @@ class _ClientDomainManagerState extends State<ClientDomainManager> {
                 Text("Active Client Logos (${AppDataStore.clientLogos.length})", style: GoogleFonts.cinzel(fontSize: 16, fontWeight: FontWeight.bold, color: AdminTheme.primaryDark)),
                 const Divider(height: 20),
                 AppDataStore.clientLogos.isEmpty
-                    ? Padding(
-                  padding: const EdgeInsets.all(16.0),
-                  child: Center(child: Text("No client logos available.", style: GoogleFonts.plusJakartaSans(color: Colors.grey))),
-                )
+                    ? Padding(padding: const EdgeInsets.all(16.0), child: Center(child: Text("No client logos available.", style: GoogleFonts.plusJakartaSans(color: Colors.grey))))
                     : GridView.builder(
                   shrinkWrap: true,
                   physics: const NeverScrollableScrollPhysics(),
-                  gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                    crossAxisCount: 3,
-                    crossAxisSpacing: 12,
-                    mainAxisSpacing: 12,
-                  ),
+                  gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(crossAxisCount: 3, crossAxisSpacing: 12, mainAxisSpacing: 12),
                   itemCount: AppDataStore.clientLogos.length,
                   itemBuilder: (context, idx) {
                     final item = AppDataStore.clientLogos[idx];
+                    final displayUrl = item.imgUrl ?? '';
+
                     return Stack(
                       children: [
                         Container(
                           width: double.infinity,
                           height: double.infinity,
-                          decoration: BoxDecoration(
-                            border: Border.all(color: Colors.grey.shade200),
-                            borderRadius: BorderRadius.circular(10),
-                          ),
+                          decoration: BoxDecoration(border: Border.all(color: Colors.grey.shade200), borderRadius: BorderRadius.circular(10)),
                           child: ClipRRect(
                             borderRadius: BorderRadius.circular(10),
-                            child: buildUniversalImage(MediaItem(url: item.imgUrl)),
+                            child: buildUniversalImage(MediaItem(url: displayUrl)),
                           ),
                         ),
                         Positioned(
