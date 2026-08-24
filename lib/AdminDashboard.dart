@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:bindu_decor_admin/Api/Operations.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart';
@@ -28,11 +30,7 @@ class MediaItem {
   final Uint8List? bytes;
   final String? fileName;
 
-  const MediaItem({
-    this.url,
-    this.bytes,
-    this.fileName,
-  });
+  const MediaItem({this.url, this.bytes, this.fileName});
 
   bool get isWebUrl =>
       url != null &&
@@ -42,9 +40,6 @@ class MediaItem {
   bool get hasBytes => bytes != null && bytes!.isNotEmpty;
 }
 
-// ==========================================
-// CENTRALIZED DYNAMIC APP DATA STORE
-// ==========================================
 class AppDataStore {
   static final List<ClientItems> clientLogos = [];
   static final List<ProjectItem> projects = [];
@@ -52,111 +47,146 @@ class AppDataStore {
 }
 
 // ==========================================
-// CROSS-PLATFORM SAFE IMAGE RENDERER
+// IMAGE RENDERER & NORMALIZATION
 // ==========================================
+// ==========================================
+// IMAGE RENDERER & NORMALIZATION
+// ==========================================
+String normalizeToAbsoluteImageUrl(String rawOrPartial) {
+  final raw = (rawOrPartial ?? '').trim();
+  if (raw.isEmpty) return '';
+
+  // If it's a data URI, return as is
+  if (raw.startsWith('data:image/')) {
+    return raw;
+  }
+
+  // If already an absolute URL with correct base, return as is
+  if (raw.startsWith(OperationsApi.baseUrl)) {
+    return raw;
+  }
+
+  // If already an absolute URL (any http/https) - fix the base URL
+  if (raw.startsWith('http://') || raw.startsWith('https://')) {
+    // Rebuild with our base URL
+    return OperationsApi.resolveImageUrl(raw);
+  }
+
+  // If the API returned a path, resolve it
+  final resolved = OperationsApi.resolveImageUrl(raw);
+
+  // Final guard
+  return resolved;
+}
+
 Widget buildUniversalImage(
     MediaItem media, {
       BoxFit fit = BoxFit.cover,
+      double? width,
+      double? height,
     }) {
-  // Local selected/camera image.
+  // 1) Local bytes (file picker / camera)
   if (media.hasBytes) {
     return Image.memory(
       media.bytes!,
       fit: fit,
+      width: width,
+      height: height,
       gaplessPlayback: true,
-      errorBuilder: (context, error, stackTrace) {
-        return const Center(
-          child: Icon(Icons.broken_image_rounded, color: Colors.grey),
-        );
+      errorBuilder: (c, e, s) {
+        debugPrint('❌ ERROR loading memory image: $e');
+        return _imageFallback();
       },
     );
   }
 
-  final raw = media.url?.trim() ?? '';
+  final raw = (media.url ?? '').trim();
   if (raw.isEmpty) {
-    return Container(
-      color: const Color(0xFFF2F2F2),
-      child: const Center(
-        child: Icon(
-          Icons.image_not_supported_rounded,
-          color: Colors.grey,
-          size: 32,
-        ),
-      ),
-    );
+    return _imageFallback();
   }
 
-  // Assets must never be converted to /uploads/.
+  // 2) Asset
   if (raw.startsWith('assets/')) {
     return Image.asset(
       raw,
       fit: fit,
-      errorBuilder: (context, error, stackTrace) {
-        return const Center(
-          child: Icon(Icons.broken_image_rounded, color: Colors.grey),
-        );
+      width: width,
+      height: height,
+      errorBuilder: (c, e, s) {
+        debugPrint('❌ ERROR loading asset: $raw -> $e');
+        return _imageFallback();
       },
     );
   }
 
-  // If the URL is already a full web URL, use it directly.
-  if (raw.startsWith('http://') || raw.startsWith('https://')) {
-    return Image.network(
-      raw,
+  // 3) Data URI
+  if (raw.startsWith('data:image/')) {
+    return Image.memory(
+      base64Decode(raw.split(',').last),
       fit: fit,
+      width: width,
+      height: height,
       gaplessPlayback: true,
-      loadingBuilder: (context, child, progress) {
-        if (progress == null) return child;
-        return const Center(
-          child: SizedBox(
-            width: 22,
-            height: 22,
-            child: CircularProgressIndicator(strokeWidth: 2),
-          ),
-        );
-      },
-      errorBuilder: (context, error, stackTrace) {
-        debugPrint('IMAGE LOAD ERROR (direct): $raw -> $error');
-        return const Center(
-          child: Icon(Icons.broken_image_rounded, color: Colors.grey),
-        );
+      errorBuilder: (c, e, s) {
+        return _imageFallback();
       },
     );
   }
 
-  // Otherwise try to resolve via OperationsApi (for relative paths like "uploads/...")
-  final path = OperationsApi.resolveImageUrl(raw);
-  if (path.isEmpty) {
-    debugPrint('IMAGE RESOLVE FAILED for: "$raw" -> resolved to empty path');
-    return const Center(
-      child: Icon(Icons.broken_image_rounded, color: Colors.grey),
-    );
+  // 4) Build/normalize URL
+  final imageUrl = normalizeToAbsoluteImageUrl(raw);
+
+  debugPrint('📸 Image loader raw="$raw" resolved="$imageUrl"');
+
+  if (imageUrl.isEmpty) {
+    return _imageFallback();
   }
 
   return Image.network(
-    path,
+    imageUrl,
     fit: fit,
+    width: width,
+    height: height,
     gaplessPlayback: true,
     loadingBuilder: (context, child, progress) {
       if (progress == null) return child;
-      return const Center(
+      return Center(
         child: SizedBox(
-          width: 22,
-          height: 22,
-          child: CircularProgressIndicator(strokeWidth: 2),
+          width: 28,
+          height: 28,
+          child: CircularProgressIndicator(
+            strokeWidth: 2.0,
+            value: progress.expectedTotalBytes != null
+                ? progress.cumulativeBytesLoaded / progress.expectedTotalBytes!
+                : null,
+          ),
         ),
       );
     },
     errorBuilder: (context, error, stackTrace) {
-      debugPrint('IMAGE LOAD ERROR: $path -> $error');
-      return const Center(
-        child: Icon(Icons.broken_image_rounded, color: Colors.grey),
-      );
+      debugPrint('❌ IMAGE LOAD ERROR: $imageUrl');
+      debugPrint('Error details: $error');
+      return _imageFallback();
     },
   );
 }
 
-// ==========================================
+Widget _imageFallback() {
+  return Container(
+    color: Colors.grey.shade200,
+    child: Center(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Icon(Icons.broken_image_rounded, color: Colors.grey, size: 28),
+          const SizedBox(height: 6),
+          Text('Image not found', style: TextStyle(fontSize: 10, color: Colors.grey.shade600)),
+        ],
+      ),
+    ),
+  );
+}
+
 // MAIN ADMIN DASHBOARD
 // ==========================================
 class AdminDashboard extends StatefulWidget {

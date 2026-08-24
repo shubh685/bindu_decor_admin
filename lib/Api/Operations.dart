@@ -1,3 +1,4 @@
+// Operations.dart
 import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
@@ -6,45 +7,114 @@ import 'package:http_parser/http_parser.dart';
 import 'package:bindu_decor_admin/Helper_class.dart';
 
 class OperationsApi {
-  // Update this URL to match your server setup
-  static const String baseUrl = 'http://10.165.115.78/bindu_decor/';
+  // ⚠️ CHANGE THIS TO YOUR CORRECT URL
+  // For local machine testing: use localhost or 127.0.0.1
+  // For Android emulator: use 10.0.2.2
+  // For real device: use your PC's LAN IP
+  static const String baseUrl = 'http://localhost/bindu_decor/';
 
   // ==========================================
-  // IMAGE URL RESOLUTION
+  // FIXED IMAGE URL RESOLUTION
   // ==========================================
 
   static String resolveImageUrl(String? imagePath) {
     if (imagePath == null || imagePath.isEmpty) return '';
 
-    // If already full URL, return as is
-    if (imagePath.startsWith('http://') || imagePath.startsWith('https://')) {
-      return imagePath;
+    String raw = imagePath.trim();
+    print('🔍 RESOLVING IMAGE: "$raw"');
+
+    // Already a full URL with our baseUrl - return as is
+    if (raw.startsWith(baseUrl)) {
+      print('✅ Already has correct baseUrl: $raw');
+      return raw;
     }
 
-    // If it's an asset, return as is
-    if (imagePath.startsWith('assets/')) {
-      return imagePath;
+    // Already a full URL (any http/https) - strip it and rebuild
+    if (raw.startsWith('http://') || raw.startsWith('https://')) {
+      // Extract just the path part
+      final uri = Uri.tryParse(raw);
+      if (uri != null) {
+        String path = uri.path;
+        // Remove leading slashes
+        while (path.startsWith('/')) {
+          path = path.substring(1);
+        }
+        // Remove bindu_decor/ if present
+        if (path.startsWith('bindu_decor/')) {
+          path = path.substring('bindu_decor/'.length);
+        }
+        // Remove uploads/uploads/
+        if (path.startsWith('uploads/uploads/')) {
+          path = path.substring('uploads/'.length);
+        }
+
+        // Ensure uploads/ prefix
+        if (!path.startsWith('uploads/') && path.isNotEmpty) {
+          path = 'uploads/$path';
+        }
+
+        String fullUrl = '$baseUrl$path';
+        print('✅ Rebuilt URL: $fullUrl');
+        return fullUrl;
+      }
     }
 
-    // Remove any leading slashes
-    String cleanPath = imagePath;
+    // Asset - return as is
+    if (raw.startsWith('assets/')) {
+      return raw;
+    }
+
+    // Data URI - return as is
+    if (raw.startsWith('data:image/')) {
+      return raw;
+    }
+
+    // Clean the path - remove leading slashes
+    String cleanPath = raw;
     while (cleanPath.startsWith('/')) {
       cleanPath = cleanPath.substring(1);
     }
 
-    // Remove bindu_decor/ prefix if present
-    if (cleanPath.startsWith('bindu_decor/')) {
-      cleanPath = cleanPath.substring(12);
+    // Remove any duplicate bindu_decor/ prefixes
+    List<String> prefixes = [
+      'http://localhost/bindu_decor/',
+      'http://127.0.0.1/bindu_decor/',
+      'http://192.168.1.54/bindu_decor/',
+      'bindu_decor/',
+      'uploads/'
+    ];
+    for (String prefix in prefixes) {
+      if (cleanPath.toLowerCase().startsWith(prefix.toLowerCase())) {
+        cleanPath = cleanPath.substring(prefix.length);
+        break;
+      }
     }
 
-    // Ensure uploads/ prefix for local files
-    if (!cleanPath.startsWith('uploads/') && !cleanPath.startsWith('http')) {
+    // Remove any remaining leading slashes
+    while (cleanPath.startsWith('/')) {
+      cleanPath = cleanPath.substring(1);
+    }
+
+    // Remove duplicate uploads/
+    if (cleanPath.startsWith('uploads/uploads/')) {
+      cleanPath = cleanPath.substring('uploads/'.length);
+    }
+
+    // IMPORTANT: Don't add uploads/ if it already starts with uploads/
+    if (!cleanPath.toLowerCase().startsWith('uploads/') && cleanPath.isNotEmpty) {
       cleanPath = 'uploads/$cleanPath';
     }
 
-    // Build full URL
-    return '$baseUrl$cleanPath';
+    // Build final URL
+    String base = baseUrl.endsWith('/') ? baseUrl : '$baseUrl/';
+    String fullUrl = '$base$cleanPath';
+
+    print('✅ RESOLVED URL: $fullUrl');
+    return fullUrl;
   }
+
+  // Helper: check successful status codes (200 or 201)
+  static bool _isSuccessStatus(int status) => status == 200 || status == 201;
 
   // ==========================================
   // PRODUCT OPERATIONS
@@ -60,7 +130,7 @@ class OperationsApi {
       print('Fetch Products Status: ${response.statusCode}');
       print('Fetch Products Response: ${response.body}');
 
-      if (response.statusCode == 200) {
+      if (_isSuccessStatus(response.statusCode)) {
         final data = json.decode(response.body);
         if (data['status'] == 'success' && data['data'] != null) {
           final List<dynamic> products = data['data'];
@@ -86,31 +156,34 @@ class OperationsApi {
       );
 
       // Add text fields
-      fields.forEach((key, value) {
-        request.fields[key] = value;
-      });
+      request.fields.addAll(fields);
 
       // Add image if present
       if (imageBytes != null && imageBytes.isNotEmpty) {
         final fileName = imageFileName ?? 'product.jpg';
+        // Derive subtype from filename extension if possible
+        String subtype = 'jpeg';
+        if (fileName.toLowerCase().endsWith('.png')) subtype = 'png';
+        else if (fileName.toLowerCase().endsWith('.webp')) subtype = 'webp';
+        else if (fileName.toLowerCase().endsWith('.gif')) subtype = 'gif';
         final multipartFile = http.MultipartFile.fromBytes(
           'imageFile',
           imageBytes,
           filename: fileName,
-          contentType: MediaType('image', 'jpeg'),
+          contentType: MediaType('image', subtype),
         );
         request.files.add(multipartFile);
       }
 
-      final response = await request.send();
-      final responseBody = await response.stream.bytesToString();
+      final streamed = await request.send();
+      final response = await http.Response.fromStream(streamed);
 
-      print('Add Product Response: $responseBody');
+      print('Add Product HTTP(${response.statusCode}): ${response.body}');
 
-      if (response.statusCode == 200) {
-        return json.decode(responseBody);
+      if (_isSuccessStatus(response.statusCode)) {
+        return json.decode(response.body) as Map<String, dynamic>;
       } else {
-        return {'status': 'error', 'message': 'Server error: ${response.statusCode}'};
+        return {'status': 'error', 'message': 'Server error: ${response.statusCode}', 'raw': response.body};
       }
     } catch (e) {
       return {'status': 'error', 'message': 'Connection error: $e'};
@@ -125,7 +198,9 @@ class OperationsApi {
         body: {'id': id},
       );
 
-      if (response.statusCode == 200) {
+      print('Delete Product HTTP(${response.statusCode}): ${response.body}');
+
+      if (_isSuccessStatus(response.statusCode)) {
         final data = json.decode(response.body);
         return data['status'] == 'success';
       }
@@ -150,7 +225,7 @@ class OperationsApi {
       print('Fetch Projects Status: ${response.statusCode}');
       print('Fetch Projects Response: ${response.body}');
 
-      if (response.statusCode == 200) {
+      if (_isSuccessStatus(response.statusCode)) {
         final data = json.decode(response.body);
         if (data['status'] == 'success' && data['data'] != null) {
           final List<dynamic> projects = data['data'];
@@ -175,32 +250,32 @@ class OperationsApi {
         Uri.parse('${baseUrl}projects.php?action=add'),
       );
 
-      // Add text fields
-      fields.forEach((key, value) {
-        request.fields[key] = value;
-      });
+      request.fields.addAll(fields);
 
-      // Add image if present
       if (imageBytes != null && imageBytes.isNotEmpty) {
         final fileName = imageFileName ?? 'project.jpg';
+        String subtype = 'jpeg';
+        if (fileName.toLowerCase().endsWith('.png')) subtype = 'png';
+        else if (fileName.toLowerCase().endsWith('.webp')) subtype = 'webp';
+        else if (fileName.toLowerCase().endsWith('.gif')) subtype = 'gif';
         final multipartFile = http.MultipartFile.fromBytes(
           'imageFile',
           imageBytes,
           filename: fileName,
-          contentType: MediaType('image', 'jpeg'),
+          contentType: MediaType('image', subtype),
         );
         request.files.add(multipartFile);
       }
 
-      final response = await request.send();
-      final responseBody = await response.stream.bytesToString();
+      final streamed = await request.send();
+      final response = await http.Response.fromStream(streamed);
 
-      print('Add Project Response: $responseBody');
+      print('Add Project HTTP(${response.statusCode}): ${response.body}');
 
-      if (response.statusCode == 200) {
-        return json.decode(responseBody);
+      if (_isSuccessStatus(response.statusCode)) {
+        return json.decode(response.body) as Map<String, dynamic>;
       } else {
-        return {'status': 'error', 'message': 'Server error: ${response.statusCode}'};
+        return {'status': 'error', 'message': 'Server error: ${response.statusCode}', 'raw': response.body};
       }
     } catch (e) {
       return {'status': 'error', 'message': 'Connection error: $e'};
@@ -215,7 +290,9 @@ class OperationsApi {
         body: {'id': id},
       );
 
-      if (response.statusCode == 200) {
+      print('Delete Project HTTP(${response.statusCode}): ${response.body}');
+
+      if (_isSuccessStatus(response.statusCode)) {
         final data = json.decode(response.body);
         return data['status'] == 'success';
       }
@@ -240,7 +317,7 @@ class OperationsApi {
       print('Fetch Clients Status: ${response.statusCode}');
       print('Fetch Clients Response: ${response.body}');
 
-      if (response.statusCode == 200) {
+      if (_isSuccessStatus(response.statusCode)) {
         final data = json.decode(response.body);
         if (data['status'] == 'success' && data['data'] != null) {
           final List<dynamic> clients = data['data'];
@@ -273,24 +350,28 @@ class OperationsApi {
       // Add image bytes if provided
       if (imageBytes != null && imageBytes.isNotEmpty) {
         final fileName = imageFileName ?? 'client.jpg';
+        String subtype = 'jpeg';
+        if (fileName.toLowerCase().endsWith('.png')) subtype = 'png';
+        else if (fileName.toLowerCase().endsWith('.webp')) subtype = 'webp';
+        else if (fileName.toLowerCase().endsWith('.gif')) subtype = 'gif';
         final multipartFile = http.MultipartFile.fromBytes(
           'imageFile',
           imageBytes,
           filename: fileName,
-          contentType: MediaType('image', 'jpeg'),
+          contentType: MediaType('image', subtype),
         );
         request.files.add(multipartFile);
       }
 
-      final response = await request.send();
-      final responseBody = await response.stream.bytesToString();
+      final streamed = await request.send();
+      final response = await http.Response.fromStream(streamed);
 
-      print('Add Client Response: $responseBody');
+      print('Add Client HTTP(${response.statusCode}): ${response.body}');
 
-      if (response.statusCode == 200) {
-        return json.decode(responseBody);
+      if (_isSuccessStatus(response.statusCode)) {
+        return json.decode(response.body) as Map<String, dynamic>;
       } else {
-        return {'status': 'error', 'message': 'Server error: ${response.statusCode}'};
+        return {'status': 'error', 'message': 'Server error: ${response.statusCode}', 'raw': response.body};
       }
     } catch (e) {
       return {'status': 'error', 'message': 'Connection error: $e'};
@@ -305,7 +386,9 @@ class OperationsApi {
         body: {'id': id},
       );
 
-      if (response.statusCode == 200) {
+      print('Delete Client HTTP(${response.statusCode}): ${response.body}');
+
+      if (_isSuccessStatus(response.statusCode)) {
         final data = json.decode(response.body);
         return data['status'] == 'success';
       }
