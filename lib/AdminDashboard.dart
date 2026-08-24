@@ -1,18 +1,13 @@
-// Refactored AdminDashboard.dart - Full Web, Desktop, and Mobile Compatibility
-// Works with the updated PHP APIs that proxy external http/https images.
-
-import 'dart:typed_data';
-
 import 'package:bindu_decor_admin/Api/Operations.dart';
 import 'package:file_picker/file_picker.dart';
-import 'package:flutter/foundation.dart'; // Provides kIsWeb & defaultTargetPlatform
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'Api/Auth_Api.dart';
-import 'Helper_Class.dart';
+import 'Helper_class.dart';
 
 // ==========================================
 // LUXURY THEME COLORS & STYLES
@@ -28,46 +23,23 @@ class AdminTheme {
 // ==========================================
 // UNIFIED MEDIA DATA MODEL
 // ==========================================
-// ==========================================
-// ENHANCED MEDIA DATA MODEL
-// ==========================================
-// ==========================================
-// ENHANCED MEDIA DATA MODEL
-// ==========================================
 class MediaItem {
   final String? url;
   final Uint8List? bytes;
   final String? fileName;
-  final bool isLocalFile; // Flag to distinguish local uploaded files
 
   const MediaItem({
     this.url,
     this.bytes,
     this.fileName,
-    this.isLocalFile = false,
   });
 
   bool get isWebUrl =>
-      url != null && (url!.startsWith('http://') || url!.startsWith('https://'));
+      url != null &&
+          (url!.startsWith('http://') || url!.startsWith('https://'));
 
   bool get isAsset => url != null && url!.startsWith('assets/');
   bool get hasBytes => bytes != null && bytes!.isNotEmpty;
-
-  // Check if this is a local uploaded file (stored in uploads/ directory)
-  bool get isLocalUpload =>
-      url != null && (url!.startsWith('uploads/') || url!.contains('/uploads/'));
-
-  // Get the actual image source for display
-  String get displayUrl {
-    if (url == null) return '';
-    if (url!.startsWith('//')) return 'https:${url!}';
-    if (!url!.startsWith('http://') &&
-        !url!.startsWith('https://') &&
-        !url!.startsWith('assets/')) {
-      return 'https://$url';
-    }
-    return url!;
-  }
 }
 
 // ==========================================
@@ -82,142 +54,105 @@ class AppDataStore {
 // ==========================================
 // CROSS-PLATFORM SAFE IMAGE RENDERER
 // ==========================================
-// ==========================================
-// CROSS-PLATFORM SAFE IMAGE RENDERER (FIXED)
-// ==========================================
 Widget buildUniversalImage(
     MediaItem media, {
       BoxFit fit = BoxFit.cover,
-      double? width,
-      double? height,
     }) {
-  // PRIORITY 1: If we have bytes (file picked), use Image.memory
+  // Local selected/camera image.
   if (media.hasBytes) {
     return Image.memory(
       media.bytes!,
       fit: fit,
-      width: width,
-      height: height,
       gaplessPlayback: true,
-      errorBuilder: (context, error, stackTrace) => _buildImageErrorWidget(),
-    );
-  }
-
-  String raw = media.url?.trim() ?? '';
-  if (raw.isEmpty) return _buildImageErrorWidget();
-
-  // PRIORITY 2: Handle local uploaded files (uploads/ directory)
-  if (media.isLocalUpload) {
-    // For local files, we need to use the API proxy or direct file access
-    // The PHP backend serves these through the proxy system
-    String proxyUrl = raw;
-
-    // If it's a relative path, convert to full URL through proxy
-    if (!raw.startsWith('http://') && !raw.startsWith('https://') && !raw.startsWith('assets/')) {
-      // Use the proxy endpoint for local files
-      proxyUrl = '/${raw.replaceFirst('uploads/', 'uploads/')}';
-    }
-
-    return Image.network(
-      proxyUrl,
-      fit: fit,
-      width: width,
-      height: height,
-      gaplessPlayback: true,
-      headers: const {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-        'Accept': 'image/webp,image/apng,image/*,*/*;q=0.8',
-      },
-      loadingBuilder: (context, child, progress) {
-        if (progress == null) return child;
+      errorBuilder: (context, error, stackTrace) {
         return const Center(
-          child: SizedBox(
-            width: 22,
-            height: 22,
-            child: CircularProgressIndicator(strokeWidth: 2),
-          ),
+          child: Icon(Icons.broken_image_rounded, color: Colors.grey),
         );
       },
-      errorBuilder: (context, error, stackTrace) {
-        debugPrint('Local image load error: $raw -> $error');
-        return _buildImageErrorWidget();
-      },
     );
   }
 
-  // PRIORITY 3: External web URLs
-  if (media.isWebUrl || raw.startsWith('http://') || raw.startsWith('https://')) {
-    return Image.network(
-      raw,
-      fit: fit,
-      width: width,
-      height: height,
-      gaplessPlayback: true,
-      headers: const {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-        'Accept': 'image/webp,image/apng,image/*,*/*;q=0.8',
-      },
-      loadingBuilder: (context, child, progress) {
-        if (progress == null) return child;
-        return const Center(
-          child: SizedBox(
-            width: 22,
-            height: 22,
-            child: CircularProgressIndicator(strokeWidth: 2),
-          ),
-        );
-      },
-      errorBuilder: (context, error, stackTrace) {
-        debugPrint('Network image load error: $raw -> $error');
-        // Try fallback with HTTPS if HTTP fails
-        if (raw.startsWith('http://')) {
-          final httpsUrl = raw.replaceFirst('http://', 'https://');
-          return Image.network(
-            httpsUrl,
-            fit: fit,
-            width: width,
-            height: height,
-            gaplessPlayback: true,
-            errorBuilder: (ctx, err, stack) => _buildImageErrorWidget(),
-          );
-        }
-        return _buildImageErrorWidget();
-      },
+  final raw = media.url?.trim() ?? '';
+  if (raw.isEmpty) {
+    return Container(
+      color: const Color(0xFFF2F2F2),
+      child: const Center(
+        child: Icon(
+          Icons.image_not_supported_rounded,
+          color: Colors.grey,
+          size: 32,
+        ),
+      ),
     );
   }
 
-  // PRIORITY 4: Asset images
+  // Assets must never be converted to /uploads/.
   if (raw.startsWith('assets/')) {
     return Image.asset(
       raw,
       fit: fit,
-      width: width,
-      height: height,
-      errorBuilder: (context, error, stackTrace) => _buildImageErrorWidget(),
+      errorBuilder: (context, error, stackTrace) {
+        return const Center(
+          child: Icon(Icons.broken_image_rounded, color: Colors.grey),
+        );
+      },
     );
   }
 
-  // Fallback: Try as network image with auto-fix
-  return Image.network(
-    raw.startsWith('//') ? 'https:$raw' : 'https://$raw',
-    fit: fit,
-    width: width,
-    height: height,
-    gaplessPlayback: true,
-    errorBuilder: (context, error, stackTrace) => _buildImageErrorWidget(),
-  );
-}
+  // If the URL is already a full web URL, use it directly.
+  if (raw.startsWith('http://') || raw.startsWith('https://')) {
+    return Image.network(
+      raw,
+      fit: fit,
+      gaplessPlayback: true,
+      loadingBuilder: (context, child, progress) {
+        if (progress == null) return child;
+        return const Center(
+          child: SizedBox(
+            width: 22,
+            height: 22,
+            child: CircularProgressIndicator(strokeWidth: 2),
+          ),
+        );
+      },
+      errorBuilder: (context, error, stackTrace) {
+        debugPrint('IMAGE LOAD ERROR (direct): $raw -> $error');
+        return const Center(
+          child: Icon(Icons.broken_image_rounded, color: Colors.grey),
+        );
+      },
+    );
+  }
 
-Widget _buildImageErrorWidget() {
-  return Container(
-    color: const Color(0xFFF2F2F2),
-    child: const Center(
-      child: Icon(
-        Icons.image_not_supported_rounded,
-        color: Colors.grey,
-        size: 32,
-      ),
-    ),
+  // Otherwise try to resolve via OperationsApi (for relative paths like "uploads/...")
+  final path = OperationsApi.resolveImageUrl(raw);
+  if (path.isEmpty) {
+    debugPrint('IMAGE RESOLVE FAILED for: "$raw" -> resolved to empty path');
+    return const Center(
+      child: Icon(Icons.broken_image_rounded, color: Colors.grey),
+    );
+  }
+
+  return Image.network(
+    path,
+    fit: fit,
+    gaplessPlayback: true,
+    loadingBuilder: (context, child, progress) {
+      if (progress == null) return child;
+      return const Center(
+        child: SizedBox(
+          width: 22,
+          height: 22,
+          child: CircularProgressIndicator(strokeWidth: 2),
+        ),
+      );
+    },
+    errorBuilder: (context, error, stackTrace) {
+      debugPrint('IMAGE LOAD ERROR: $path -> $error');
+      return const Center(
+        child: Icon(Icons.broken_image_rounded, color: Colors.grey),
+      );
+    },
   );
 }
 
@@ -231,40 +166,15 @@ class AdminDashboard extends StatefulWidget {
   State<AdminDashboard> createState() => _AdminDashboardState();
 }
 
-class _AdminDashboardState extends State<AdminDashboard>
-    with SingleTickerProviderStateMixin {
+class _AdminDashboardState extends State<AdminDashboard> with SingleTickerProviderStateMixin {
   late TabController _tabController;
+  bool _isLoading = true;
 
   @override
   void initState() {
     super.initState();
     _tabController = TabController(length: 4, vsync: this);
-
-    // Load all data from server once on dashboard creation
     _loadAllData();
-  }
-
-  Future<void> _loadAllData() async {
-    try {
-      final serverProjects = await OperationsApi.fetchProjects();
-      final serverProducts = await OperationsApi.fetchProducts();
-      final serverClients = await OperationsApi.fetchClients();
-
-      if (!mounted) return;
-
-      setState(() {
-        AppDataStore.projects.clear();
-        AppDataStore.projects.addAll(serverProjects);
-
-        AppDataStore.products.clear();
-        AppDataStore.products.addAll(serverProducts);
-
-        AppDataStore.clientLogos.clear();
-        AppDataStore.clientLogos.addAll(serverClients);
-      });
-    } catch (e) {
-      debugPrint('Failed to load initial data: $e');
-    }
   }
 
   @override
@@ -273,9 +183,58 @@ class _AdminDashboardState extends State<AdminDashboard>
     super.dispose();
   }
 
+  Future<void> _loadAllData() async {
+    setState(() {
+      _isLoading = true;
+    });
+
+    try {
+      // Load all data in parallel
+      await Future.wait([
+        _loadProjects(),
+        _loadProducts(),
+        _loadClients(),
+      ]);
+    } catch (e) {
+      print('Error loading data: $e');
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _loadProjects() async {
+    final projects = await OperationsApi.fetchProjects();
+    if (mounted) {
+      AppDataStore.projects.clear();
+      AppDataStore.projects.addAll(projects);
+      print('Loaded ${projects.length} projects');
+    }
+  }
+
+  Future<void> _loadProducts() async {
+    final products = await OperationsApi.fetchProducts();
+    if (mounted) {
+      AppDataStore.products.clear();
+      AppDataStore.products.addAll(products);
+      print('Loaded ${products.length} products');
+    }
+  }
+
+  Future<void> _loadClients() async {
+    final clients = await OperationsApi.fetchClients();
+    if (mounted) {
+      AppDataStore.clientLogos.clear();
+      AppDataStore.clientLogos.addAll(clients);
+      print('Loaded ${clients.length} clients');
+    }
+  }
+
   void _refreshDashboard() {
-    // Re-sync counts and UI by re-building (optionally re-fetch if needed)
-    setState(() {});
+    _loadAllData();
   }
 
   @override
@@ -295,19 +254,10 @@ class _AdminDashboardState extends State<AdminDashboard>
                 shape: BoxShape.circle,
                 border: Border.all(color: AdminTheme.primaryAccent, width: 1.5),
               ),
-              child: const Icon(Icons.shield_outlined,
-                  color: AdminTheme.primaryAccent, size: 20),
+              child: const Icon(Icons.shield_outlined, color: AdminTheme.primaryAccent, size: 20),
             ),
             const SizedBox(width: 12),
-            Text(
-              "Admin Management Portal",
-              style: GoogleFonts.aleo(
-                fontWeight: FontWeight.bold,
-                fontSize: 20,
-                letterSpacing: 1.0,
-                color: Colors.white,
-              ),
-            ),
+            Text("Admin Management Portal", style: GoogleFonts.aleo(fontWeight: FontWeight.bold, fontSize: 20, letterSpacing: 1.0, color: Colors.white)),
           ],
         ),
         bottom: TabBar(
@@ -316,10 +266,8 @@ class _AdminDashboardState extends State<AdminDashboard>
           indicatorWeight: 3,
           labelColor: AdminTheme.primaryAccent,
           unselectedLabelColor: Colors.white70,
-          labelStyle:
-          GoogleFonts.plusJakartaSans(fontWeight: FontWeight.bold, fontSize: 13),
-          unselectedLabelStyle:
-          GoogleFonts.plusJakartaSans(fontWeight: FontWeight.w500, fontSize: 13),
+          labelStyle: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.bold, fontSize: 13),
+          unselectedLabelStyle: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.w500, fontSize: 13),
           tabs: const [
             Tab(icon: Icon(Icons.dashboard_rounded), text: "Overview"),
             Tab(icon: Icon(Icons.apartment_rounded), text: "Projects"),
@@ -331,8 +279,14 @@ class _AdminDashboardState extends State<AdminDashboard>
           Padding(
             padding: const EdgeInsets.only(right: 16),
             child: IconButton(
-              onPressed: () {},
-              tooltip: "Logout",
+              onPressed: () {
+                // Refresh all data
+                _loadAllData();
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text("Refreshing data...")),
+                );
+              },
+              tooltip: "Refresh",
               icon: Container(
                 padding: const EdgeInsets.all(8),
                 decoration: BoxDecoration(
@@ -340,14 +294,24 @@ class _AdminDashboardState extends State<AdminDashboard>
                   color: Colors.white.withOpacity(0.1),
                   border: Border.all(color: AdminTheme.primaryAccent.withOpacity(0.4)),
                 ),
-                child: const Icon(Icons.logout_rounded,
-                    size: 18, color: AdminTheme.primaryAccent),
+                child: const Icon(Icons.refresh_rounded, size: 18, color: AdminTheme.primaryAccent),
               ),
             ),
           )
         ],
       ),
-      body: TabBarView(
+      body: _isLoading
+          ? const Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            CircularProgressIndicator(color: AdminTheme.primaryAccent),
+            SizedBox(height: 16),
+            Text("Loading data...", style: TextStyle(color: AdminTheme.primaryDark)),
+          ],
+        ),
+      )
+          : TabBarView(
         controller: _tabController,
         children: [
           OverviewDomainManager(onNavigateToTab: (index) => _tabController.animateTo(index)),
@@ -385,12 +349,9 @@ class OverviewDomainManager extends StatelessWidget {
               Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text("System Summary Overview",
-                      style: GoogleFonts.aleo(
-                          fontSize: 22, fontWeight: FontWeight.bold, color: AdminTheme.primaryDark)),
+                  Text("System Summary Overview", style: GoogleFonts.aleo(fontSize: 22, fontWeight: FontWeight.bold, color: AdminTheme.primaryDark)),
                   const SizedBox(height: 4),
-                  Text("Live metrics and control dashboard",
-                      style: GoogleFonts.plusJakartaSans(fontSize: 13, color: Colors.grey.shade600)),
+                  Text("Live metrics and control dashboard", style: GoogleFonts.plusJakartaSans(fontSize: 13, color: Colors.grey.shade600)),
                 ],
               ),
             ],
@@ -411,14 +372,11 @@ class OverviewDomainManager extends StatelessWidget {
               }
               return Row(
                 children: [
-                  Expanded(
-                      child: _buildCountCard("Projects", projectCount, Icons.apartment_rounded, const Color(0xFF1E88E5), () => onNavigateToTab(1))),
+                  Expanded(child: _buildCountCard("Projects", projectCount, Icons.apartment_rounded, const Color(0xFF1E88E5), () => onNavigateToTab(1))),
                   const SizedBox(width: 16),
-                  Expanded(
-                      child: _buildCountCard("Products", productCount, Icons.category_rounded, const Color(0xFFFB8C00), () => onNavigateToTab(2))),
+                  Expanded(child: _buildCountCard("Products", productCount, Icons.category_rounded, const Color(0xFFFB8C00), () => onNavigateToTab(2))),
                   const SizedBox(width: 16),
-                  Expanded(
-                      child: _buildCountCard("Clients", clientCount, Icons.people_alt_rounded, const Color(0xFF43A047), () => onNavigateToTab(3))),
+                  Expanded(child: _buildCountCard("Clients", clientCount, Icons.people_alt_rounded, const Color(0xFF43A047), () => onNavigateToTab(3))),
                 ],
               );
             },
@@ -428,7 +386,12 @@ class OverviewDomainManager extends StatelessWidget {
             title: "Recent Projects",
             itemCount: projectCount,
             onViewAll: () => onNavigateToTab(1),
-            child: ListView.separated(
+            child: projectCount == 0
+                ? const Padding(
+              padding: EdgeInsets.all(16.0),
+              child: Center(child: Text("No projects available.")),
+            )
+                : ListView.separated(
               shrinkWrap: true,
               physics: const NeverScrollableScrollPhysics(),
               itemCount: projectCount > 3 ? 3 : projectCount,
@@ -438,19 +401,21 @@ class OverviewDomainManager extends StatelessWidget {
                 return ListTile(
                   contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
                   leading: Container(
-                    padding: const EdgeInsets.all(8),
+                    width: 50,
+                    height: 50,
                     decoration: BoxDecoration(
-                      color: AdminTheme.primaryDark.withOpacity(0.08),
-                      borderRadius: BorderRadius.circular(10),
+                      borderRadius: BorderRadius.circular(8),
                     ),
-                    child: const Icon(Icons.apartment_rounded, color: AdminTheme.primaryDark),
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(8),
+                      child: buildUniversalImage(
+                        MediaItem(url: item.imageUrls.isNotEmpty ? item.imageUrls.first : ''),
+                        fit: BoxFit.cover,
+                      ),
+                    ),
                   ),
-                  title: Text(item.title,
-                      style: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.bold, fontSize: 14),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis),
-                  subtitle: Text("${item.location} • ${item.pricing}",
-                      style: GoogleFonts.plusJakartaSans(fontSize: 12, color: Colors.grey.shade600)),
+                  title: Text(item.title, style: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.bold, fontSize: 14), maxLines: 1, overflow: TextOverflow.ellipsis),
+                  subtitle: Text("${item.location} • ${item.pricing}", style: GoogleFonts.plusJakartaSans(fontSize: 12, color: Colors.grey.shade600)),
                 );
               },
             ),
@@ -460,7 +425,12 @@ class OverviewDomainManager extends StatelessWidget {
             title: "Recent Products",
             itemCount: productCount,
             onViewAll: () => onNavigateToTab(2),
-            child: ListView.separated(
+            child: productCount == 0
+                ? const Padding(
+              padding: EdgeInsets.all(16.0),
+              child: Center(child: Text("No products available.")),
+            )
+                : ListView.separated(
               shrinkWrap: true,
               physics: const NeverScrollableScrollPhysics(),
               itemCount: productCount > 3 ? 3 : productCount,
@@ -470,19 +440,21 @@ class OverviewDomainManager extends StatelessWidget {
                 return ListTile(
                   contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
                   leading: Container(
-                    padding: const EdgeInsets.all(8),
+                    width: 50,
+                    height: 50,
                     decoration: BoxDecoration(
-                      color: AdminTheme.secondaryAccent.withOpacity(0.15),
-                      borderRadius: BorderRadius.circular(10),
+                      borderRadius: BorderRadius.circular(8),
                     ),
-                    child: const Icon(Icons.category_rounded, color: AdminTheme.secondaryAccent),
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(8),
+                      child: buildUniversalImage(
+                        MediaItem(url: item.imageUrls.isNotEmpty ? item.imageUrls.first : ''),
+                        fit: BoxFit.cover,
+                      ),
+                    ),
                   ),
-                  title: Text(item.title,
-                      style: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.bold, fontSize: 14),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis),
-                  subtitle: Text(item.category,
-                      style: GoogleFonts.plusJakartaSans(fontSize: 12, color: Colors.grey.shade600)),
+                  title: Text(item.title, style: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.bold, fontSize: 14), maxLines: 1, overflow: TextOverflow.ellipsis),
+                  subtitle: Text(item.category, style: GoogleFonts.plusJakartaSans(fontSize: 12, color: Colors.grey.shade600)),
                 );
               },
             ),
@@ -524,10 +496,8 @@ class OverviewDomainManager extends StatelessWidget {
             Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(count.toString(),
-                    style: GoogleFonts.alexandria(fontSize: 26, fontWeight: FontWeight.bold, color: AdminTheme.primaryDark)),
-                Text(label,
-                    style: GoogleFonts.aleo(fontSize: 13, fontWeight: FontWeight.w600, color: Colors.grey.shade600)),
+                Text(count.toString(), style: GoogleFonts.alexandria(fontSize: 26, fontWeight: FontWeight.bold, color: AdminTheme.primaryDark)),
+                Text(label, style: GoogleFonts.aleo(fontSize: 13, fontWeight: FontWeight.w600, color: Colors.grey.shade600)),
               ],
             ),
           ],
@@ -536,12 +506,7 @@ class OverviewDomainManager extends StatelessWidget {
     );
   }
 
-  Widget _buildSummarySection({
-    required String title,
-    required int itemCount,
-    required VoidCallback onViewAll,
-    required Widget child,
-  }) {
+  Widget _buildSummarySection({required String title, required int itemCount, required VoidCallback onViewAll, required Widget child}) {
     return Container(
       decoration: BoxDecoration(
         color: Colors.white,
@@ -563,28 +528,16 @@ class OverviewDomainManager extends StatelessWidget {
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Text("$title ($itemCount)",
-                    style: GoogleFonts.aleo(fontSize: 16, fontWeight: FontWeight.bold, color: AdminTheme.primaryDark)),
+                Text("$title ($itemCount)", style: GoogleFonts.aleo(fontSize: 16, fontWeight: FontWeight.bold, color: AdminTheme.primaryDark)),
                 TextButton(
                   onPressed: onViewAll,
-                  child: Text("Manage All",
-                      style: GoogleFonts.plusJakartaSans(color: AdminTheme.secondaryAccent, fontWeight: FontWeight.bold, fontSize: 12)),
+                  child: Text("Manage All", style: GoogleFonts.plusJakartaSans(color: AdminTheme.secondaryAccent, fontWeight: FontWeight.bold, fontSize: 12)),
                 ),
               ],
             ),
           ),
           const Divider(height: 1),
-          itemCount == 0
-              ? Padding(
-            padding: const EdgeInsets.all(24.0),
-            child: Center(
-              child: Text(
-                "No records available.",
-                style: GoogleFonts.plusJakartaSans(color: Colors.grey.shade500, fontSize: 13),
-              ),
-            ),
-          )
-              : child,
+          child,
         ],
       ),
     );
@@ -610,22 +563,13 @@ class MediaPickerWidget extends StatelessWidget {
     required this.onRemoveMedia,
   });
 
-  // Replaced dart:io Platform checks with cross-platform defaultTargetPlatform
   bool get _shouldShowCameraButton {
     if (kIsWeb) return false;
-    return defaultTargetPlatform == TargetPlatform.android ||
-        defaultTargetPlatform == TargetPlatform.iOS;
+    return defaultTargetPlatform == TargetPlatform.android || defaultTargetPlatform == TargetPlatform.iOS;
   }
 
   Future<bool> _requestPermission(Permission permission, BuildContext context) async {
     if (kIsWeb) return true;
-
-    // Desktop platforms don't use permission_handler
-    if (defaultTargetPlatform == TargetPlatform.windows ||
-        defaultTargetPlatform == TargetPlatform.macOS ||
-        defaultTargetPlatform == TargetPlatform.linux) {
-      return true;
-    }
 
     final status = await permission.status;
     if (status.isGranted) return true;
@@ -648,8 +592,7 @@ class MediaPickerWidget extends StatelessWidget {
   }
 
   Future<void> _pickFiles(BuildContext context) async {
-    if (!kIsWeb &&
-        (defaultTargetPlatform == TargetPlatform.android || defaultTargetPlatform == TargetPlatform.iOS)) {
+    if (!kIsWeb && (defaultTargetPlatform == TargetPlatform.android || defaultTargetPlatform == TargetPlatform.iOS)) {
       bool granted = await _requestPermission(Permission.photos, context);
       if (!granted) return;
     }
@@ -657,7 +600,7 @@ class MediaPickerWidget extends StatelessWidget {
     FilePickerResult? result = await FilePicker.pickFiles(
       type: FileType.image,
       allowMultiple: true,
-      withData: true, // Crucial for memory bytes on Web & Desktop
+      withData: true,
     );
 
     if (result != null) {
@@ -715,8 +658,7 @@ class MediaPickerWidget extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text("Media Attachment (Optional)",
-            style: GoogleFonts.plusJakartaSans(fontSize: 13, fontWeight: FontWeight.bold, color: AdminTheme.primaryDark)),
+        Text("Media Attachment (Optional)", style: GoogleFonts.plusJakartaSans(fontSize: 13, fontWeight: FontWeight.bold, color: AdminTheme.primaryDark)),
         const SizedBox(height: 8),
         Row(
           children: [
@@ -854,15 +796,7 @@ class _ProjectDomainManagerState extends State<ProjectDomainManager> {
   bool _isLoading = false;
 
   String _selectedPropertyType = 'Apartment';
-  final List<String> _propertyTypeOptions = [
-    'Apartment',
-    'Villa',
-    'Bungalow',
-    'Penthouse',
-    'Duplex',
-    'Row House',
-    'Commercial'
-  ];
+  final List<String> _propertyTypeOptions = ['Apartment', 'Villa', 'Bungalow', 'Penthouse', 'Duplex', 'Row House', 'Commercial'];
 
   String _selectedScope = 'Full Interior';
   final List<String> _scopeOptions = [
@@ -878,27 +812,6 @@ class _ProjectDomainManagerState extends State<ProjectDomainManager> {
   ];
 
   final List<MediaItem> _mediaItems = [];
-
-  @override
-  void initState() {
-    super.initState();
-    _loadProjectsFromServer();
-  }
-
-  Future<void> _loadProjectsFromServer() async {
-    try {
-      final serverProjects = await OperationsApi.fetchProjects();
-      if (mounted) {
-        setState(() {
-          AppDataStore.projects.clear();
-          AppDataStore.projects.addAll(serverProjects);
-        });
-        widget.onDataChanged();
-      }
-    } catch (e) {
-      debugPrint('Failed to load projects: $e');
-    }
-  }
 
   Future<void> _addProject() async {
     if (_title.text.trim().isEmpty) {
@@ -931,44 +844,48 @@ class _ProjectDomainManagerState extends State<ProjectDomainManager> {
 
       final Map<String, String> fields = {
         "title": _title.text.trim(),
-        "subTitle": _subTitle.text.trim().isEmpty ? "Featured Residence" : _subTitle.text.trim(),
+        "sub_title": _subTitle.text.trim().isEmpty ? "Featured Residence" : _subTitle.text.trim(),
         "location": _location.text.trim().isEmpty ? "Mumbai" : _location.text.trim(),
         "pricing": _pricing.text.trim().isEmpty ? "N/A" : _pricing.text.trim(),
         "bhk": _bhk.text.trim().isEmpty ? "3-BHK" : _bhk.text.trim(),
         "scope": _selectedScope,
-        "propertyType": _selectedPropertyType,
+        "property_type": _selectedPropertyType,
         "size": _size.text.trim().isEmpty ? "2000 sq ft" : _size.text.trim(),
         "description": _description.text.trim().isEmpty ? "No description provided." : _description.text.trim(),
-        "imageUrl": externalUrl,
+        "image_url": externalUrl,
       };
 
       final response = await OperationsApi.addProject(
         fields: fields,
         imageBytes: rawBytes,
-        imageFileName: _mediaItems.isNotEmpty ? _mediaItems.first.fileName : null,
+        imageFileName:
+        _mediaItems.isNotEmpty ? _mediaItems.first.fileName : null,
       );
 
       if (!mounted) return;
 
       if (response['status'] == 'success') {
-        final String finalImageUrl = (response['image_url'] ?? response['imageUrl'] ?? externalUrl).toString().trim();
+        final String finalImageUrl =
+        (response['image_url'] ??
+            response['imageUrl'] ??
+            externalUrl)
+            .toString()
+            .trim();
 
-        // Immediately update dynamic state with memory bytes if direct URL is not available
         AppDataStore.projects.add(
-          ProjectItem(
-            id: response['id']?.toString() ?? DateTime.now().millisecondsSinceEpoch.toString(),
-            title: fields["title"]!,
-            subTitle: fields["subTitle"]!,
-            location: fields["location"]!,
-            tags: const <String>[],
-            pricing: fields["pricing"]!,
-            bhk: fields["bhk"]!,
-            scope: fields["scope"]!,
-            propertyType: fields["propertyType"]!,
-            size: fields["size"]!,
-            description: fields["description"]!,
-            imageUrls: finalImageUrl.isNotEmpty ? [finalImageUrl] : <String>[],
-          ),
+          ProjectItem.fromMap({
+            "id": response['id']?.toString() ?? DateTime.now().millisecondsSinceEpoch.toString(),
+            "title": fields["title"],
+            "sub_title": fields["sub_title"],
+            "location": fields["location"],
+            "pricing": fields["pricing"],
+            "bhk": fields["bhk"],
+            "scope": fields["scope"],
+            "property_type": fields["property_type"],
+            "size": fields["size"],
+            "description": fields["description"],
+            "image_url": finalImageUrl,
+          }),
         );
 
         _title.clear();
@@ -1070,7 +987,11 @@ class _ProjectDomainManagerState extends State<ProjectDomainManager> {
               borderRadius: BorderRadius.circular(16),
               border: Border.all(color: Colors.grey.shade200),
               boxShadow: [
-                BoxShadow(color: Colors.black.withOpacity(0.03), blurRadius: 15, offset: const Offset(0, 5)),
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.03),
+                  blurRadius: 15,
+                  offset: const Offset(0, 5),
+                ),
               ],
             ),
             padding: const EdgeInsets.all(24),
@@ -1159,7 +1080,9 @@ class _ProjectDomainManagerState extends State<ProjectDomainManager> {
                   onAddWebUrl: () {
                     if (_urlController.text.trim().isNotEmpty) {
                       setState(() {
-                        _mediaItems.add(MediaItem(url: _urlController.text.trim()));
+                        _mediaItems.add(
+                          MediaItem(url: _urlController.text.trim()),
+                        );
                         _urlController.clear();
                       });
                     }
@@ -1180,7 +1103,11 @@ class _ProjectDomainManagerState extends State<ProjectDomainManager> {
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                     ),
                     child: _isLoading
-                        ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                        ? const SizedBox(
+                      width: 20,
+                      height: 20,
+                      child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
+                    )
                         : Text("PUBLISH PROJECT", style: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.bold, fontSize: 13, letterSpacing: 0.8)),
                   ),
                 )
@@ -1194,7 +1121,11 @@ class _ProjectDomainManagerState extends State<ProjectDomainManager> {
               borderRadius: BorderRadius.circular(16),
               border: Border.all(color: Colors.grey.shade200),
               boxShadow: [
-                BoxShadow(color: Colors.black.withOpacity(0.03), blurRadius: 15, offset: const Offset(0, 5)),
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.03),
+                  blurRadius: 15,
+                  offset: const Offset(0, 5),
+                ),
               ],
             ),
             padding: const EdgeInsets.all(20),
@@ -1222,14 +1153,24 @@ class _ProjectDomainManagerState extends State<ProjectDomainManager> {
                       leading: Container(
                         width: 50,
                         height: 50,
-                        decoration: BoxDecoration(borderRadius: BorderRadius.circular(8)),
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(8),
+                        ),
                         child: ClipRRect(
                           borderRadius: BorderRadius.circular(8),
                           child: buildUniversalImage(MediaItem(url: displayUrl)),
                         ),
                       ),
-                      title: Text(item.title, style: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.bold, fontSize: 14), maxLines: 1, overflow: TextOverflow.ellipsis),
-                      subtitle: Text("${item.propertyType} • ${item.location} • ${item.pricing}", style: GoogleFonts.plusJakartaSans(fontSize: 12, color: Colors.grey.shade600)),
+                      title: Text(
+                        item.title,
+                        style: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.bold, fontSize: 14),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      subtitle: Text(
+                        "${item.propertyType} • ${item.location} • ${item.pricing}",
+                        style: GoogleFonts.plusJakartaSans(fontSize: 12, color: Colors.grey.shade600),
+                      ),
                       trailing: IconButton(
                         icon: const Icon(Icons.delete_outline_rounded, color: Colors.redAccent),
                         onPressed: () => _deleteProject(item.id.toString(), idx),
@@ -1269,41 +1210,10 @@ class _ProductDomainManagerState extends State<ProductDomainManager> {
 
   String _selectedCategory = 'Wallpapers';
   final List<String> _categories = [
-    'Wallpapers',
-    'Floorings',
-    'Carpets',
-    'Blinds',
-    'Glass Films',
-    'Artificial Turfs',
-    'Gym Floorings',
-    'Awnings',
-    'Mosquito Nets',
-    'Upholstery',
-    'Curtains',
-    'Stretch Ceiling'
+    'Wallpapers', 'Floorings', 'Carpets', 'Blinds', 'Glass Films', 'Artificial Turfs',
+    'Gym Floorings', 'Awnings', 'Mosquito Nets', 'Upholstery', 'Curtains', 'Stretch Ceiling'
   ];
   final List<MediaItem> _mediaItems = [];
-
-  @override
-  void initState() {
-    super.initState();
-    _loadProductsFromServer();
-  }
-
-  Future<void> _loadProductsFromServer() async {
-    try {
-      final serverProducts = await OperationsApi.fetchProducts();
-      if (mounted) {
-        setState(() {
-          AppDataStore.products.clear();
-          AppDataStore.products.addAll(serverProducts);
-        });
-        widget.onDataChanged();
-      }
-    } catch (e) {
-      debugPrint('Failed to load products: $e');
-    }
-  }
 
   Future<void> _addProduct() async {
     if (_title.text.trim().isEmpty) {
@@ -1342,13 +1252,19 @@ class _ProductDomainManagerState extends State<ProductDomainManager> {
       final response = await OperationsApi.addProduct(
         fields: fields,
         imageBytes: rawBytes,
-        imageFileName: _mediaItems.isNotEmpty ? _mediaItems.first.fileName : null,
+        imageFileName:
+        _mediaItems.isNotEmpty ? _mediaItems.first.fileName : null,
       );
 
       if (!mounted) return;
 
       if (response['status'] == 'success') {
-        final String finalImageUrl = (response['image_url'] ?? response['imageUrl'] ?? externalUrl).toString().trim();
+        final String finalImageUrl =
+        (response['image_url'] ??
+            response['imageUrl'] ??
+            externalUrl)
+            .toString()
+            .trim();
 
         AppDataStore.products.add(
           DecorProductItem(
@@ -1451,7 +1367,18 @@ class _ProductDomainManagerState extends State<ProductDomainManager> {
       child: Column(
         children: [
           Container(
-            decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(16), border: Border.all(color: Colors.grey.shade200), boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.03), blurRadius: 15, offset: const Offset(0, 5))]),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: Colors.grey.shade200),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.03),
+                  blurRadius: 15,
+                  offset: const Offset(0, 5),
+                ),
+              ],
+            ),
             padding: const EdgeInsets.all(24),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -1499,7 +1426,9 @@ class _ProductDomainManagerState extends State<ProductDomainManager> {
                   onAddWebUrl: () {
                     if (_urlController.text.trim().isNotEmpty) {
                       setState(() {
-                        _mediaItems.add(MediaItem(url: _urlController.text.trim()));
+                        _mediaItems.add(
+                          MediaItem(url: _urlController.text.trim()),
+                        );
                         _urlController.clear();
                       });
                     }
@@ -1513,9 +1442,18 @@ class _ProductDomainManagerState extends State<ProductDomainManager> {
                   height: 48,
                   child: ElevatedButton(
                     onPressed: _isLoading ? null : _addProduct,
-                    style: ElevatedButton.styleFrom(backgroundColor: AdminTheme.primaryDark, foregroundColor: Colors.white, elevation: 2, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AdminTheme.primaryDark,
+                      foregroundColor: Colors.white,
+                      elevation: 2,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    ),
                     child: _isLoading
-                        ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                        ? const SizedBox(
+                      width: 20,
+                      height: 20,
+                      child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
+                    )
                         : Text("PUBLISH PRODUCT", style: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.bold, fontSize: 13, letterSpacing: 0.8)),
                   ),
                 )
@@ -1524,7 +1462,18 @@ class _ProductDomainManagerState extends State<ProductDomainManager> {
           ),
           const SizedBox(height: 24),
           Container(
-            decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(16), border: Border.all(color: Colors.grey.shade200), boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.03), blurRadius: 15, offset: const Offset(0, 5))]),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: Colors.grey.shade200),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.03),
+                  blurRadius: 15,
+                  offset: const Offset(0, 5),
+                ),
+              ],
+            ),
             padding: const EdgeInsets.all(20),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -1532,7 +1481,10 @@ class _ProductDomainManagerState extends State<ProductDomainManager> {
                 Text("Active Products Summary (${AppDataStore.products.length})", style: GoogleFonts.cinzel(fontSize: 16, fontWeight: FontWeight.bold, color: AdminTheme.primaryDark)),
                 const Divider(height: 20),
                 AppDataStore.products.isEmpty
-                    ? Padding(padding: const EdgeInsets.all(16.0), child: Center(child: Text("No products available.", style: GoogleFonts.plusJakartaSans(color: Colors.grey))))
+                    ? Padding(
+                  padding: const EdgeInsets.all(16.0),
+                  child: Center(child: Text("No products available.", style: GoogleFonts.plusJakartaSans(color: Colors.grey))),
+                )
                     : ListView.separated(
                   shrinkWrap: true,
                   physics: const NeverScrollableScrollPhysics(),
@@ -1547,7 +1499,9 @@ class _ProductDomainManagerState extends State<ProductDomainManager> {
                       leading: Container(
                         width: 50,
                         height: 50,
-                        decoration: BoxDecoration(borderRadius: BorderRadius.circular(8)),
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(8),
+                        ),
                         child: ClipRRect(
                           borderRadius: BorderRadius.circular(8),
                           child: buildUniversalImage(MediaItem(url: displayUrl)),
@@ -1588,27 +1542,6 @@ class _ClientDomainManagerState extends State<ClientDomainManager> {
   final List<MediaItem> _mediaItems = [];
   bool _isLoading = false;
 
-  @override
-  void initState() {
-    super.initState();
-    _loadClientsFromServer();
-  }
-
-  Future<void> _loadClientsFromServer() async {
-    try {
-      final serverClients = await OperationsApi.fetchClients();
-      if (mounted) {
-        setState(() {
-          AppDataStore.clientLogos.clear();
-          AppDataStore.clientLogos.addAll(serverClients);
-        });
-        widget.onDataChanged();
-      }
-    } catch (e) {
-      debugPrint('Failed to load clients: $e');
-    }
-  }
-
   Future<void> _addClients() async {
     if (_mediaItems.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -1623,7 +1556,6 @@ class _ClientDomainManagerState extends State<ClientDomainManager> {
 
     try {
       for (var media in _mediaItems) {
-        // Cast directly to Uint8List? since MediaItem.bytes is already Uint8List?
         final Uint8List? imageBytes = media.bytes;
 
         final response = await OperationsApi.addClient(
@@ -1712,7 +1644,18 @@ class _ClientDomainManagerState extends State<ClientDomainManager> {
       child: Column(
         children: [
           Container(
-            decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(16), border: Border.all(color: Colors.grey.shade200), boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.03), blurRadius: 15, offset: const Offset(0, 5))]),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: Colors.grey.shade200),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.03),
+                  blurRadius: 15,
+                  offset: const Offset(0, 5),
+                ),
+              ],
+            ),
             padding: const EdgeInsets.all(24),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -1725,7 +1668,9 @@ class _ClientDomainManagerState extends State<ClientDomainManager> {
                   onAddWebUrl: () {
                     if (_urlController.text.trim().isNotEmpty) {
                       setState(() {
-                        _mediaItems.add(MediaItem(url: _urlController.text.trim()));
+                        _mediaItems.add(
+                          MediaItem(url: _urlController.text.trim()),
+                        );
                         _urlController.clear();
                       });
                     }
@@ -1739,9 +1684,18 @@ class _ClientDomainManagerState extends State<ClientDomainManager> {
                   height: 48,
                   child: ElevatedButton(
                     onPressed: _isLoading ? null : _addClients,
-                    style: ElevatedButton.styleFrom(backgroundColor: AdminTheme.primaryDark, foregroundColor: Colors.white, elevation: 2, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AdminTheme.primaryDark,
+                      foregroundColor: Colors.white,
+                      elevation: 2,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    ),
                     child: _isLoading
-                        ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                        ? const SizedBox(
+                      width: 20,
+                      height: 20,
+                      child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
+                    )
                         : Text("SAVE CLIENT LOGOS", style: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.bold, fontSize: 13, letterSpacing: 0.8)),
                   ),
                 )
@@ -1750,7 +1704,18 @@ class _ClientDomainManagerState extends State<ClientDomainManager> {
           ),
           const SizedBox(height: 24),
           Container(
-            decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(16), border: Border.all(color: Colors.grey.shade200), boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.03), blurRadius: 15, offset: const Offset(0, 5))]),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: Colors.grey.shade200),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.03),
+                  blurRadius: 15,
+                  offset: const Offset(0, 5),
+                ),
+              ],
+            ),
             padding: const EdgeInsets.all(20),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -1758,25 +1723,33 @@ class _ClientDomainManagerState extends State<ClientDomainManager> {
                 Text("Active Client Logos (${AppDataStore.clientLogos.length})", style: GoogleFonts.cinzel(fontSize: 16, fontWeight: FontWeight.bold, color: AdminTheme.primaryDark)),
                 const Divider(height: 20),
                 AppDataStore.clientLogos.isEmpty
-                    ? Padding(padding: const EdgeInsets.all(16.0), child: Center(child: Text("No client logos available.", style: GoogleFonts.plusJakartaSans(color: Colors.grey))))
+                    ? Padding(
+                  padding: const EdgeInsets.all(16.0),
+                  child: Center(child: Text("No client logos available.", style: GoogleFonts.plusJakartaSans(color: Colors.grey))),
+                )
                     : GridView.builder(
                   shrinkWrap: true,
                   physics: const NeverScrollableScrollPhysics(),
-                  gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(crossAxisCount: 3, crossAxisSpacing: 12, mainAxisSpacing: 12),
+                  gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                    crossAxisCount: 3,
+                    crossAxisSpacing: 12,
+                    mainAxisSpacing: 12,
+                  ),
                   itemCount: AppDataStore.clientLogos.length,
                   itemBuilder: (context, idx) {
                     final item = AppDataStore.clientLogos[idx];
-                    final displayUrl = item.imgUrl ?? '';
-
                     return Stack(
                       children: [
                         Container(
                           width: double.infinity,
                           height: double.infinity,
-                          decoration: BoxDecoration(border: Border.all(color: Colors.grey.shade200), borderRadius: BorderRadius.circular(10)),
+                          decoration: BoxDecoration(
+                            border: Border.all(color: Colors.grey.shade200),
+                            borderRadius: BorderRadius.circular(10),
+                          ),
                           child: ClipRRect(
                             borderRadius: BorderRadius.circular(10),
-                            child: buildUniversalImage(MediaItem(url: displayUrl)),
+                            child: buildUniversalImage(MediaItem(url: item.imgUrl)),
                           ),
                         ),
                         Positioned(

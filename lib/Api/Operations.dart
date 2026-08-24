@@ -1,138 +1,88 @@
-// ==========================================
-// UPDATED OPERATIONS API
-// ==========================================
 import 'dart:convert';
+import 'dart:io';
 import 'dart:typed_data';
-
-import 'package:flutter/cupertino.dart';
 import 'package:http/http.dart' as http;
-
-import '../Helper_Class.dart';
+import 'package:http_parser/http_parser.dart';
+import 'package:bindu_decor_admin/Helper_class.dart';
 
 class OperationsApi {
-  static const String baseUrl = 'http://192.168.1.15/bindu_decor/';
+  // Update this URL to match your server setup
+  static const String baseUrl = 'http://10.165.115.78/bindu_decor/';
 
-  // Fetch projects with proper image URLs
-  static Future<List<ProjectItem>> fetchProjects() async {
-    try {
-      final response = await http.post(
-        Uri.parse('$baseUrl/projects.php'),
-        body: {'action': 'fetch'},
-      );
+  // ==========================================
+  // IMAGE URL RESOLUTION
+  // ==========================================
 
-      if (response.statusCode == 200) {
-        final data = json.decode(response.body);
-        if (data['status'] == 'success') {
-          final List<dynamic> projectsData = data['data'] ?? [];
-          return projectsData.map((item) {
-            // Get the image URL from any of the possible fields
-            String imageUrl = item['image_url'] ??
-                item['imageUrl'] ??
-                item['img_url'] ??
-                '';
+  static String resolveImageUrl(String? imagePath) {
+    if (imagePath == null || imagePath.isEmpty) return '';
 
-            // Build image URLs list
-            List<String> imageUrls = [];
-            if (imageUrl.isNotEmpty) {
-              imageUrls.add(imageUrl);
-            }
-
-            return ProjectItem(
-              id: item['id']?.toString() ?? '',
-              title: item['title'] ?? '',
-              subTitle: item['sub_title'] ?? '',
-              location: item['location'] ?? '',
-              tags: const [],
-              pricing: item['pricing'] ?? '',
-              bhk: item['bhk'] ?? '',
-              scope: item['scope'] ?? '',
-              propertyType: item['property_type'] ?? '',
-              size: item['size'] ?? '',
-              description: item['description'] ?? '',
-              imageUrls: imageUrls,
-            );
-          }).toList();
-        }
-      }
-    } catch (e) {
-      debugPrint('Error fetching projects: $e');
+    // If already full URL, return as is
+    if (imagePath.startsWith('http://') || imagePath.startsWith('https://')) {
+      return imagePath;
     }
-    return [];
+
+    // If it's an asset, return as is
+    if (imagePath.startsWith('assets/')) {
+      return imagePath;
+    }
+
+    // Remove any leading slashes
+    String cleanPath = imagePath;
+    while (cleanPath.startsWith('/')) {
+      cleanPath = cleanPath.substring(1);
+    }
+
+    // Remove bindu_decor/ prefix if present
+    if (cleanPath.startsWith('bindu_decor/')) {
+      cleanPath = cleanPath.substring(12);
+    }
+
+    // Ensure uploads/ prefix for local files
+    if (!cleanPath.startsWith('uploads/') && !cleanPath.startsWith('http')) {
+      cleanPath = 'uploads/$cleanPath';
+    }
+
+    // Build full URL
+    return '$baseUrl$cleanPath';
   }
 
-  // Fetch products with proper image URLs
+  // ==========================================
+  // PRODUCT OPERATIONS
+  // ==========================================
+
   static Future<List<DecorProductItem>> fetchProducts() async {
     try {
-      final response = await http.post(
-        Uri.parse('$baseUrl/products.php'),
-        body: {'action': 'fetch'},
+      final response = await http.get(
+        Uri.parse('${baseUrl}products.php?action=fetch'),
+        headers: {'Accept': 'application/json'},
       );
+
+      print('Fetch Products Status: ${response.statusCode}');
+      print('Fetch Products Response: ${response.body}');
 
       if (response.statusCode == 200) {
         final data = json.decode(response.body);
-        if (data['status'] == 'success') {
-          final List<dynamic> productsData = data['data'] ?? [];
-          return productsData.map((item) {
-            String imageUrl = item['image_url'] ??
-                item['imageUrl'] ??
-                item['img_url'] ??
-                '';
-            List<String> imageUrls = imageUrl.isNotEmpty ? [imageUrl] : [];
-
-            return DecorProductItem(
-              id: item['id']?.toString() ?? '',
-              title: item['title'] ?? '',
-              category: item['category'] ?? 'HOME DECOR',
-              imageUrls: imageUrls,
-              description: item['description'] ?? '',
-              material: item['material'] ?? 'Premium Grade Material',
-              printType: item['print_type'] ?? 'High Definition Digital Print / Finish',
-            );
-          }).toList();
+        if (data['status'] == 'success' && data['data'] != null) {
+          final List<dynamic> products = data['data'];
+          return products.map((item) => DecorProductItem.fromMap(item)).toList();
         }
       }
+      return [];
     } catch (e) {
-      debugPrint('Error fetching products: $e');
+      print('Error fetching products: $e');
+      return [];
     }
-    return [];
   }
 
-  // Fetch clients with proper image URLs
-  static Future<List<ClientItems>> fetchClients() async {
-    try {
-      final response = await http.post(
-        Uri.parse('$baseUrl/clients.php'),
-        body: {'action': 'fetch'},
-      );
-
-      if (response.statusCode == 200) {
-        final data = json.decode(response.body);
-        if (data['status'] == 'success') {
-          final List<dynamic> clientsData = data['data'] ?? [];
-          return clientsData.map((item) {
-            return ClientItems(
-              id: item['id']?.toString() ?? '',
-              imgUrl: item['img_url'] ?? item['image_url'] ?? '',
-            );
-          }).toList();
-        }
-      }
-    } catch (e) {
-      debugPrint('Error fetching clients: $e');
-    }
-    return [];
-  }
-
-  // Add project with proper image handling
-  static Future<Map<String, dynamic>> addProject({
+  static Future<Map<String, dynamic>> addProduct({
     required Map<String, String> fields,
     Uint8List? imageBytes,
     String? imageFileName,
   }) async {
     try {
-      var request = http.MultipartRequest(
+      final request = http.MultipartRequest(
         'POST',
-        Uri.parse('$baseUrl/projects.php?action=add'),
+        Uri.parse('${baseUrl}products.php?action=add'),
       );
 
       // Add text fields
@@ -140,147 +90,229 @@ class OperationsApi {
         request.fields[key] = value;
       });
 
-      // Add image file if bytes are provided
+      // Add image if present
       if (imageBytes != null && imageBytes.isNotEmpty) {
-        final fileName = imageFileName ?? 'image_${DateTime.now().millisecondsSinceEpoch}.jpg';
-        request.files.add(
-          http.MultipartFile.fromBytes(
-            'imageFile',
-            imageBytes,
-            filename: fileName,
-          ),
+        final fileName = imageFileName ?? 'product.jpg';
+        final multipartFile = http.MultipartFile.fromBytes(
+          'imageFile',
+          imageBytes,
+          filename: fileName,
+          contentType: MediaType('image', 'jpeg'),
         );
+        request.files.add(multipartFile);
       }
 
       final response = await request.send();
-      final responseData = await response.stream.bytesToString();
-      final jsonData = json.decode(responseData);
+      final responseBody = await response.stream.bytesToString();
 
-      return jsonData;
-    } catch (e) {
-      debugPrint('Error adding project: $e');
-      return {'status': 'error', 'message': e.toString()};
-    }
-  }
+      print('Add Product Response: $responseBody');
 
-  // Add product with proper image handling
-  static Future<Map<String, dynamic>> addProduct({
-    required Map<String, String> fields,
-    Uint8List? imageBytes,
-    String? imageFileName,
-  }) async {
-    try {
-      var request = http.MultipartRequest(
-        'POST',
-        Uri.parse('$baseUrl/products.php?action=add'),
-      );
-
-      fields.forEach((key, value) {
-        request.fields[key] = value;
-      });
-
-      if (imageBytes != null && imageBytes.isNotEmpty) {
-        final fileName = imageFileName ?? 'product_${DateTime.now().millisecondsSinceEpoch}.jpg';
-        request.files.add(
-          http.MultipartFile.fromBytes(
-            'imageFile',
-            imageBytes,
-            filename: fileName,
-          ),
-        );
+      if (response.statusCode == 200) {
+        return json.decode(responseBody);
+      } else {
+        return {'status': 'error', 'message': 'Server error: ${response.statusCode}'};
       }
-
-      final response = await request.send();
-      final responseData = await response.stream.bytesToString();
-      final jsonData = json.decode(responseData);
-
-      return jsonData;
     } catch (e) {
-      debugPrint('Error adding product: $e');
-      return {'status': 'error', 'message': e.toString()};
-    }
-  }
-
-  // Delete methods
-  static Future<bool> deleteProject(String id) async {
-    try {
-      final response = await http.post(
-        Uri.parse('$baseUrl/projects.php'),
-        body: {'action': 'delete', 'id': id},
-      );
-      final data = json.decode(response.body);
-      return data['status'] == 'success';
-    } catch (e) {
-      return false;
+      return {'status': 'error', 'message': 'Connection error: $e'};
     }
   }
 
   static Future<bool> deleteProduct(String id) async {
     try {
       final response = await http.post(
-        Uri.parse('$baseUrl/products.php'),
-        body: {'action': 'delete', 'id': id},
+        Uri.parse('${baseUrl}products.php?action=delete'),
+        headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+        body: {'id': id},
       );
-      final data = json.decode(response.body);
-      return data['status'] == 'success';
+
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body);
+        return data['status'] == 'success';
+      }
+      return false;
     } catch (e) {
+      print('Error deleting product: $e');
       return false;
     }
   }
 
-  static Future<bool> deleteClient(String id) async {
+  // ==========================================
+  // PROJECT OPERATIONS
+  // ==========================================
+
+  static Future<List<ProjectItem>> fetchProjects() async {
+    try {
+      final response = await http.get(
+        Uri.parse('${baseUrl}projects.php?action=fetch'),
+        headers: {'Accept': 'application/json'},
+      );
+
+      print('Fetch Projects Status: ${response.statusCode}');
+      print('Fetch Projects Response: ${response.body}');
+
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body);
+        if (data['status'] == 'success' && data['data'] != null) {
+          final List<dynamic> projects = data['data'];
+          return projects.map((item) => ProjectItem.fromMap(item)).toList();
+        }
+      }
+      return [];
+    } catch (e) {
+      print('Error fetching projects: $e');
+      return [];
+    }
+  }
+
+  static Future<Map<String, dynamic>> addProject({
+    required Map<String, String> fields,
+    Uint8List? imageBytes,
+    String? imageFileName,
+  }) async {
+    try {
+      final request = http.MultipartRequest(
+        'POST',
+        Uri.parse('${baseUrl}projects.php?action=add'),
+      );
+
+      // Add text fields
+      fields.forEach((key, value) {
+        request.fields[key] = value;
+      });
+
+      // Add image if present
+      if (imageBytes != null && imageBytes.isNotEmpty) {
+        final fileName = imageFileName ?? 'project.jpg';
+        final multipartFile = http.MultipartFile.fromBytes(
+          'imageFile',
+          imageBytes,
+          filename: fileName,
+          contentType: MediaType('image', 'jpeg'),
+        );
+        request.files.add(multipartFile);
+      }
+
+      final response = await request.send();
+      final responseBody = await response.stream.bytesToString();
+
+      print('Add Project Response: $responseBody');
+
+      if (response.statusCode == 200) {
+        return json.decode(responseBody);
+      } else {
+        return {'status': 'error', 'message': 'Server error: ${response.statusCode}'};
+      }
+    } catch (e) {
+      return {'status': 'error', 'message': 'Connection error: $e'};
+    }
+  }
+
+  static Future<bool> deleteProject(String id) async {
     try {
       final response = await http.post(
-        Uri.parse('$baseUrl/clients.php'),
-        body: {'action': 'delete', 'id': id},
+        Uri.parse('${baseUrl}projects.php?action=delete'),
+        headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+        body: {'id': id},
       );
-      final data = json.decode(response.body);
-      return data['status'] == 'success';
+
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body);
+        return data['status'] == 'success';
+      }
+      return false;
     } catch (e) {
+      print('Error deleting project: $e');
       return false;
     }
   }
 
+  // ==========================================
+  // CLIENT OPERATIONS
+  // ==========================================
 
-// Add client with proper image handling (supports camera, gallery, file picker, external URL)
+  static Future<List<ClientItems>> fetchClients() async {
+    try {
+      final response = await http.get(
+        Uri.parse('${baseUrl}clients.php?action=fetch'),
+        headers: {'Accept': 'application/json'},
+      );
+
+      print('Fetch Clients Status: ${response.statusCode}');
+      print('Fetch Clients Response: ${response.body}');
+
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body);
+        if (data['status'] == 'success' && data['data'] != null) {
+          final List<dynamic> clients = data['data'];
+          return clients.map((item) => ClientItems.fromMap(item)).toList();
+        }
+      }
+      return [];
+    } catch (e) {
+      print('Error fetching clients: $e');
+      return [];
+    }
+  }
+
   static Future<Map<String, dynamic>> addClient({
     String? imageUrl,
     Uint8List? imageBytes,
     String? imageFileName,
   }) async {
     try {
-      var request = http.MultipartRequest(
+      final request = http.MultipartRequest(
         'POST',
-        Uri.parse('$baseUrl/clients.php?action=add'),
+        Uri.parse('${baseUrl}clients.php?action=add'),
       );
 
-      // If image URL is provided (external URL or local path)
+      // Add image URL if provided
       if (imageUrl != null && imageUrl.isNotEmpty) {
         request.fields['image_url'] = imageUrl;
       }
 
-      // If image bytes are provided (from camera or gallery)
+      // Add image bytes if provided
       if (imageBytes != null && imageBytes.isNotEmpty) {
-        final fileName = imageFileName ??
-            'client_${DateTime.now().millisecondsSinceEpoch}.jpg';
-        request.files.add(
-          http.MultipartFile.fromBytes(
-            'imageFile',
-            imageBytes,
-            filename: fileName,
-          ),
+        final fileName = imageFileName ?? 'client.jpg';
+        final multipartFile = http.MultipartFile.fromBytes(
+          'imageFile',
+          imageBytes,
+          filename: fileName,
+          contentType: MediaType('image', 'jpeg'),
         );
+        request.files.add(multipartFile);
       }
 
-      final streamedResponse = await request.send();
-      final responseData = await streamedResponse.stream.bytesToString();
-      final jsonData = json.decode(responseData);
+      final response = await request.send();
+      final responseBody = await response.stream.bytesToString();
 
-      debugPrint('Add Client Response: $jsonData');
-      return jsonData;
+      print('Add Client Response: $responseBody');
+
+      if (response.statusCode == 200) {
+        return json.decode(responseBody);
+      } else {
+        return {'status': 'error', 'message': 'Server error: ${response.statusCode}'};
+      }
     } catch (e) {
-      debugPrint('Error adding client: $e');
-      return {'status': 'error', 'message': e.toString()};
+      return {'status': 'error', 'message': 'Connection error: $e'};
+    }
+  }
+
+  static Future<bool> deleteClient(String id) async {
+    try {
+      final response = await http.post(
+        Uri.parse('${baseUrl}clients.php?action=delete'),
+        headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+        body: {'id': id},
+      );
+
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body);
+        return data['status'] == 'success';
+      }
+      return false;
+    } catch (e) {
+      print('Error deleting client: $e');
+      return false;
     }
   }
 }

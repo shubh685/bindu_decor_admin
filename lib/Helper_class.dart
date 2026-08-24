@@ -1,6 +1,20 @@
-// ==========================================
-// ENHANCED DATA MODELS WITH FULL URL GENERATION
-// ==========================================
+String _resolveImageUrl(String raw) {
+  var value = raw.trim();
+  if (value.isEmpty) return '';
+  if (value.startsWith('assets/')) return value;
+  final uri = Uri.tryParse(value);
+  if (uri != null && (uri.scheme == 'http' || uri.scheme == 'https')) return value;
+  if (value.startsWith('//')) return 'https:$value';
+  value = value.replaceAll('\\', '/');
+  while (value.startsWith('/')) { value = value.substring(1); }
+  final origin = Uri.base;
+  final baseUrl = origin.host.isNotEmpty
+      ? '${origin.scheme.isEmpty ? 'http' : origin.scheme}://${origin.host}${origin.hasPort ? ':${origin.port}' : ''}/bindu_decor'
+      : 'http://192.168.1.15/bindu_decor';
+  if (value.toLowerCase().startsWith('bindu_decor/')) value = value.substring('bindu_decor/'.length);
+  if (value.toLowerCase().startsWith('uploads/')) return '$baseUrl/$value';
+  return '$baseUrl/uploads/$value';
+}
 
 class ProjectItem {
   final String id;
@@ -15,46 +29,58 @@ class ProjectItem {
   final String size;
   final String description;
   final List<String> imageUrls;
-  final String? imageUrl; // Single image URL for backward compatibility
+  final String? imageUrl;
 
   ProjectItem({
-    required this.id,
-    required this.title,
-    required this.subTitle,
-    required this.location,
-    required this.tags,
-    required this.pricing,
-    required this.bhk,
-    required this.scope,
-    required this.propertyType,
-    required this.size,
-    required this.description,
-    required this.imageUrls,
+    this.id = '',
+    this.title = '',
+    this.subTitle = '',
+    this.location = '',
+    this.tags = const <String>[],
+    this.pricing = '',
+    this.bhk = '',
+    this.scope = '',
+    this.propertyType = '',
+    this.size = '',
+    this.description = '',
+    this.imageUrls = const <String>[],
     this.imageUrl,
   });
 
-  // Get the primary image URL with proper scheme
-  String get primaryImageUrl {
-    final url = imageUrl ?? (imageUrls.isNotEmpty ? imageUrls.first : '');
-    if (url.isEmpty) return '';
-    return _normalizeUrl(url);
-  }
-
-  // Get all image URLs with proper schemes
-  List<String> get normalizedImageUrls {
-    return imageUrls.map((url) => _normalizeUrl(url)).toList();
-  }
-
-  String _normalizeUrl(String url) {
-    if (url.startsWith('//')) return 'https:$url';
-    if (!url.startsWith('http://') &&
-        !url.startsWith('https://') &&
-        !url.startsWith('assets/') &&
-        !url.startsWith('uploads/')) {
-      return 'https://$url';
+  factory ProjectItem.fromMap(Map<String, dynamic> map) {
+    final rawImage = (map['image_url'] ?? map['imageUrl'] ?? map['img_url'] ?? '').toString().trim();
+    final rawImages = map['image_urls'] ?? map['imageUrls'];
+    final List<String> images = <String>[];
+    if (rawImages is List) {
+      for (final value in rawImages) {
+        final text = value?.toString().trim() ?? '';
+        if (text.isNotEmpty) images.add(_resolveImageUrl(text));
+      }
     }
-    return url;
+    if (rawImage.isNotEmpty) {
+      final resolved = _resolveImageUrl(rawImage);
+      if (resolved.isNotEmpty && !images.contains(resolved)) images.insert(0, resolved);
+    }
+
+    return ProjectItem(
+      id: (map['id'] ?? '').toString(),
+      title: (map['title'] ?? '').toString(),
+      subTitle: (map['sub_title'] ?? map['subTitle'] ?? '').toString(),
+      location: (map['location'] ?? '').toString(),
+      tags: map['tags'] is List ? (map['tags'] as List).map((e) => e.toString()).toList() : const <String>[],
+      pricing: (map['pricing'] ?? '').toString(),
+      bhk: (map['bhk'] ?? '').toString(),
+      scope: (map['scope'] ?? '').toString(),
+      propertyType: (map['property_type'] ?? map['propertyType'] ?? '').toString(),
+      size: (map['size'] ?? '').toString(),
+      description: (map['description'] ?? '').toString(),
+      imageUrls: images,
+      imageUrl: images.isNotEmpty ? images.first : null,
+    );
   }
+
+  String get primaryImageUrl => imageUrl ?? (imageUrls.isNotEmpty ? imageUrls.first : '');
+  List<String> get normalizedImageUrls => imageUrls.map(_resolveImageUrl).where((e) => e.isNotEmpty).toList();
 }
 
 class DecorProductItem {
@@ -68,32 +94,32 @@ class DecorProductItem {
   final String? printType;
 
   DecorProductItem({
-    required this.id,
-    required this.title,
-    required this.category,
-    required this.imageUrls,
+    this.id = '',
+    this.title = '',
+    this.category = 'HOME DECOR',
+    this.imageUrls = const <String>[],
     this.imageUrl,
-    required this.description,
-    required this.material,
-    required this.printType,
+    this.description,
+    this.material,
+    this.printType,
   });
 
-  String get primaryImageUrl {
-    final url = imageUrl ?? (imageUrls.isNotEmpty ? imageUrls.first : '');
-    if (url.isEmpty) return '';
-    return _normalizeUrl(url);
+  factory DecorProductItem.fromMap(Map<String, dynamic> map) {
+    final raw = (map['image_url'] ?? map['imageUrl'] ?? map['img_url'] ?? '').toString().trim();
+    final resolved = raw.isEmpty ? '' : _resolveImageUrl(raw);
+    return DecorProductItem(
+      id: (map['id'] ?? '').toString(),
+      title: (map['title'] ?? '').toString(),
+      category: (map['category'] ?? 'HOME DECOR').toString(),
+      imageUrls: resolved.isEmpty ? const <String>[] : <String>[resolved],
+      imageUrl: resolved.isEmpty ? null : resolved,
+      description: (map['description'] ?? '').toString(),
+      material: map['material']?.toString(),
+      printType: (map['print_type'] ?? map['printType'])?.toString(),
+    );
   }
 
-  String _normalizeUrl(String url) {
-    if (url.startsWith('//')) return 'https:$url';
-    if (!url.startsWith('http://') &&
-        !url.startsWith('https://') &&
-        !url.startsWith('assets/') &&
-        !url.startsWith('uploads/')) {
-      return 'https://$url';
-    }
-    return url;
-  }
+  String get primaryImageUrl => imageUrl ?? (imageUrls.isNotEmpty ? imageUrls.first : '');
 }
 
 class ClientItems {
@@ -103,26 +129,22 @@ class ClientItems {
   final String? imageUrlFull;
 
   ClientItems({
-    required this.id,
+    this.id = '',
     this.imgUrl,
     this.imageUrl,
     this.imageUrlFull,
   });
 
-  String get primaryImageUrl {
-    final url = imageUrlFull ?? imageUrl ?? imgUrl ?? '';
-    if (url.isEmpty) return '';
-    return _normalizeUrl(url);
+  factory ClientItems.fromMap(Map<String, dynamic> map) {
+    final raw = (map['img_url'] ?? map['image_url'] ?? map['imageUrl'] ?? '').toString().trim();
+    final resolved = raw.isEmpty ? '' : _resolveImageUrl(raw);
+    return ClientItems(
+      id: (map['id'] ?? '').toString(),
+      imgUrl: resolved,
+      imageUrl: resolved,
+      imageUrlFull: resolved,
+    );
   }
 
-  String _normalizeUrl(String url) {
-    if (url.startsWith('//')) return 'https:$url';
-    if (!url.startsWith('http://') &&
-        !url.startsWith('https://') &&
-        !url.startsWith('assets/') &&
-        !url.startsWith('uploads/')) {
-      return 'https://$url';
-    }
-    return url;
-  }
+  String get primaryImageUrl => imageUrlFull ?? imageUrl ?? imgUrl ?? '';
 }
