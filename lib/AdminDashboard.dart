@@ -1,7 +1,9 @@
 import 'dart:convert';
 
 import 'package:bindu_decor_admin/Api/Operations.dart';
+import 'package:bindu_decor_admin/products.dart';
 import 'package:file_picker/file_picker.dart';
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -9,6 +11,8 @@ import 'package:image_picker/image_picker.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'Api/Auth_Api.dart';
+import 'clients.dart';
+import 'projects.dart';
 import 'Helper_class.dart';
 import 'Safe_Net_img.dart';
 
@@ -273,7 +277,7 @@ class _AdminDashboardState extends State<AdminDashboard> with SingleTickerProvid
               child: const Icon(Icons.shield_outlined, color: AdminTheme.primaryAccent, size: 20),
             ),
             const SizedBox(width: 12),
-            Text("Admin Management Portal", style: GoogleFonts.aleo(fontWeight: FontWeight.bold, fontSize: 20, letterSpacing: 1.0, color: Colors.white)),
+            Text("Admin Management Portal", overflow: TextOverflow.ellipsis, style: GoogleFonts.aleo(fontWeight: FontWeight.bold, fontSize: 20, letterSpacing: 1.0, color: Colors.white)),
           ],
         ),
         bottom: TabBar(
@@ -289,6 +293,7 @@ class _AdminDashboardState extends State<AdminDashboard> with SingleTickerProvid
             Tab(icon: Icon(Icons.apartment_rounded), text: "Projects"),
             Tab(icon: Icon(Icons.category_rounded), text: "Products"),
             Tab(icon: Icon(Icons.people_alt_rounded), text: "Clients"),
+            Tab(icon: Icon(Icons.library_add_check_sharp), text: "Blog")
           ],
         ),
         actions: [
@@ -312,6 +317,21 @@ class _AdminDashboardState extends State<AdminDashboard> with SingleTickerProvid
                 ),
                 child: const Icon(Icons.refresh_rounded, size: 18, color: AdminTheme.primaryAccent),
               ),
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.only(right: 12),
+            child: InkWell(
+              onTap: () {
+                _showAccountPopup(context);
+              },
+              child: Container(
+                height: 32,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: Colors.white,
+                ),
+                  child: Icon(CupertinoIcons.person_crop_circle, size: 25, color: AdminTheme.primaryDark)),
             ),
           )
         ],
@@ -340,6 +360,138 @@ class _AdminDashboardState extends State<AdminDashboard> with SingleTickerProvid
   }
 }
 
+Widget _accView(BuildContext context) {
+  return Material(
+    color: Colors.transparent,
+    child: Container(
+      width: 280,
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: AdminTheme.primaryDark,
+        borderRadius: BorderRadius.circular(15),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.25),
+            blurRadius: 20,
+            offset: const Offset(0, 8),
+          ),
+        ],
+        border: Border.all(
+          color: AdminTheme.primaryAccent.withOpacity(0.3),
+        ),
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text("Admin Info", style: GoogleFonts.aleo(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.white)),
+
+          const SizedBox(height: 16),
+
+          const Divider(color: Colors.white24),
+
+          const SizedBox(height: 10),
+
+          Row(
+            children: [
+              const Icon(
+                Icons.person_outline,
+                color: AdminTheme.primaryAccent,
+              ),
+              const SizedBox(width: 10),
+              Text("Shubham Shah", style: GoogleFonts.plusJakartaSans(color: Colors.white, fontSize: 14)),
+            ],
+          ),
+          const SizedBox(height: 14),
+
+          Row(
+            children: [
+              const Icon(Icons.email_outlined, color: AdminTheme.primaryAccent,),
+              const SizedBox(width: 10),
+              Text("admin@example.com", style: GoogleFonts.plusJakartaSans(color: Colors.white70, fontSize: 13)),
+            ],
+          ),
+          const SizedBox(height: 18),
+
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton.icon(
+              onPressed: () {
+
+              },
+              icon: const Icon(Icons.password, size: 18, color: Colors.black87),
+              label: const Text("Change Password"),
+              style: ElevatedButton.styleFrom(
+                foregroundColor: AdminTheme.primaryDark,
+                padding: const EdgeInsets.symmetric(vertical: 12),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(10),
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(height: 18),
+
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton.icon(
+              onPressed: () {
+                // Logout
+              },
+              icon: const Icon(Icons.logout_rounded, size: 18),
+              label: const Text("Logout"),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AdminTheme.primaryAccent,
+                foregroundColor: AdminTheme.primaryDark,
+                padding: const EdgeInsets.symmetric(vertical: 12),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(10),
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    ),
+  );
+}
+
+void _showAccountPopup(BuildContext context) {
+  final overlay = Overlay.of(context);
+
+  late OverlayEntry overlayEntry;
+
+  overlayEntry = OverlayEntry(
+    builder: (context) {
+      return Stack(
+        children: [
+          // Close popup when clicking anywhere outside
+          Positioned.fill(
+            child: GestureDetector(
+              onTap: () {
+                overlayEntry.remove();
+              },
+              child: Container(
+                color: Colors.transparent,
+              ),
+            ),
+          ),
+
+          Positioned(
+            top: 70,
+            right: 15,
+            child: GestureDetector(
+              onTap: () {},
+              child: _accView(context),
+            ),
+          ),
+        ],
+      );
+    },
+  );
+
+  overlay.insert(overlayEntry);
+}
 // ==========================================
 // OVERVIEW DOMAIN MANAGER (SUMMARY & COUNTS)
 // ==========================================
@@ -783,1012 +935,6 @@ class MediaPickerWidget extends StatelessWidget {
           ),
         ]
       ],
-    );
-  }
-}
-
-// ==========================================
-// 1. PROJECT DOMAIN MANAGEMENT SCREEN
-// ==========================================
-class ProjectDomainManager extends StatefulWidget {
-  final VoidCallback onDataChanged;
-
-  const ProjectDomainManager({super.key, required this.onDataChanged});
-
-  @override
-  State<ProjectDomainManager> createState() => _ProjectDomainManagerState();
-}
-
-class _ProjectDomainManagerState extends State<ProjectDomainManager> {
-  final _title = TextEditingController();
-  final _subTitle = TextEditingController();
-  final _location = TextEditingController();
-  final _pricing = TextEditingController();
-  final _bhk = TextEditingController();
-  final _size = TextEditingController();
-  final _description = TextEditingController();
-  final _urlController = TextEditingController();
-
-  bool _isLoading = false;
-
-  String _selectedPropertyType = 'Apartment';
-  final List<String> _propertyTypeOptions = ['Apartment', 'Villa', 'Bungalow', 'Penthouse', 'Duplex', 'Row House', 'Commercial'];
-
-  String _selectedScope = 'Full Interior';
-  final List<String> _scopeOptions = [
-    'Full Interior',
-    'Bedroom Interior',
-    'Living Room Interior',
-    'Children Room Interior',
-    'Kitchen Interior',
-    'Bathroom Interior',
-    'Balcony Interior',
-    'Office Interior',
-    'Hospital Interior'
-  ];
-
-  final List<MediaItem> _mediaItems = [];
-
-  Future<void> _addProject() async {
-    if (_title.text.trim().isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Project Title is required!")),
-      );
-      return;
-    }
-
-    setState(() {
-      _isLoading = true;
-    });
-
-    try {
-      String externalUrl = "";
-      Uint8List? rawBytes;
-
-      if (_mediaItems.isNotEmpty) {
-        final selectedMedia = _mediaItems.first;
-        if (selectedMedia.hasBytes) {
-          rawBytes = selectedMedia.bytes;
-        } else if (selectedMedia.url != null && selectedMedia.url!.isNotEmpty) {
-          externalUrl = selectedMedia.url!;
-        }
-      }
-
-      if (externalUrl.isEmpty && rawBytes == null) {
-        externalUrl = "https://images.unsplash.com/photo-1618221195710-dd6b41faaea6?w=800";
-      }
-
-      final Map<String, String> fields = {
-        "title": _title.text.trim(),
-        "sub_title": _subTitle.text.trim().isEmpty ? "Featured Residence" : _subTitle.text.trim(),
-        "location": _location.text.trim().isEmpty ? "Mumbai" : _location.text.trim(),
-        "pricing": _pricing.text.trim().isEmpty ? "N/A" : _pricing.text.trim(),
-        "bhk": _bhk.text.trim().isEmpty ? "3-BHK" : _bhk.text.trim(),
-        "scope": _selectedScope,
-        "property_type": _selectedPropertyType,
-        "size": _size.text.trim().isEmpty ? "2000 sq ft" : _size.text.trim(),
-        "description": _description.text.trim().isEmpty ? "No description provided." : _description.text.trim(),
-        "image_url": externalUrl,
-      };
-
-      final response = await OperationsApi.addProject(
-        fields: fields,
-        imageBytes: rawBytes,
-        imageFileName:
-        _mediaItems.isNotEmpty ? _mediaItems.first.fileName : null,
-      );
-
-      if (!mounted) return;
-
-      if (response['status'] == 'success') {
-        final String finalImageUrl =
-        (response['image_url'] ??
-            response['imageUrl'] ??
-            externalUrl)
-            .toString()
-            .trim();
-
-        AppDataStore.projects.add(
-          ProjectItem.fromMap({
-            "id": response['id']?.toString() ?? DateTime.now().millisecondsSinceEpoch.toString(),
-            "title": fields["title"],
-            "sub_title": fields["sub_title"],
-            "location": fields["location"],
-            "pricing": fields["pricing"],
-            "bhk": fields["bhk"],
-            "scope": fields["scope"],
-            "property_type": fields["property_type"],
-            "size": fields["size"],
-            "description": fields["description"],
-            "image_url": finalImageUrl,
-          }),
-        );
-
-        _title.clear();
-        _subTitle.clear();
-        _location.clear();
-        _pricing.clear();
-        _bhk.clear();
-        _selectedPropertyType = 'Apartment';
-        _selectedScope = 'Full Interior';
-        _size.clear();
-        _description.clear();
-        _mediaItems.clear();
-        _urlController.clear();
-
-        widget.onDataChanged();
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text("New Project published successfully!")),
-        );
-      } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text("Failed to publish project: ${response['message']}")),
-        );
-      }
-    } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("Connection exception: $e")),
-      );
-    } finally {
-      if (mounted) {
-        setState(() {
-          _isLoading = false;
-        });
-      }
-    }
-  }
-
-  void _deleteProject(String id, int index) {
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: Text("Delete Project", style: GoogleFonts.cinzel(fontWeight: FontWeight.bold)),
-        content: Text("Are you sure you want to delete '${AppDataStore.projects[index].title}'?"),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text("CANCEL")),
-          TextButton(
-            onPressed: () async {
-              bool success = await OperationsApi.deleteProject(id);
-              if (success && mounted) {
-                setState(() {
-                  AppDataStore.projects.removeAt(index);
-                });
-                widget.onDataChanged();
-                Navigator.pop(ctx);
-                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Project deleted!")));
-              }
-            },
-            child: const Text("DELETE", style: TextStyle(color: Colors.redAccent)),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildTextField({required TextEditingController controller, required String label, int maxLines = 1}) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(label, style: GoogleFonts.plusJakartaSans(fontSize: 12, fontWeight: FontWeight.w600, color: AdminTheme.primaryDark)),
-        const SizedBox(height: 6),
-        TextField(
-          controller: controller,
-          maxLines: maxLines,
-          style: GoogleFonts.plusJakartaSans(fontSize: 13),
-          decoration: InputDecoration(
-            isDense: true,
-            filled: true,
-            fillColor: const Color(0xFFFAF9F6),
-            contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-            border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide(color: Colors.grey.shade300)),
-            enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide(color: Colors.grey.shade300)),
-            focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: AdminTheme.primaryAccent, width: 1.5)),
-          ),
-        ),
-      ],
-    );
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return SingleChildScrollView(
-      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
-      child: Column(
-        children: [
-          Container(
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: Colors.grey.shade200),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withOpacity(0.03),
-                  blurRadius: 15,
-                  offset: const Offset(0, 5),
-                ),
-              ],
-            ),
-            padding: const EdgeInsets.all(24),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text("Add New Interior Project", style: GoogleFonts.aleo(fontSize: 18, fontWeight: FontWeight.bold, color: AdminTheme.primaryDark)),
-                const SizedBox(height: 16),
-                _buildTextField(controller: _title, label: "Project Title *"),
-                const SizedBox(height: 12),
-                Row(
-                  children: [
-                    Expanded(child: _buildTextField(controller: _subTitle, label: "Subtitle")),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text("Property Type", style: GoogleFonts.plusJakartaSans(fontSize: 12, fontWeight: FontWeight.w600, color: AdminTheme.primaryDark)),
-                          const SizedBox(height: 6),
-                          DropdownButtonFormField<String>(
-                            value: _selectedPropertyType,
-                            style: GoogleFonts.plusJakartaSans(fontSize: 13, color: AdminTheme.primaryDark),
-                            decoration: InputDecoration(
-                              isDense: true,
-                              filled: true,
-                              fillColor: const Color(0xFFFAF9F6),
-                              contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                              border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide(color: Colors.grey.shade300)),
-                              enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide(color: Colors.grey.shade300)),
-                              focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: AdminTheme.primaryAccent, width: 1.5)),
-                            ),
-                            items: _propertyTypeOptions.map((pt) => DropdownMenuItem(value: pt, child: Text(pt))).toList(),
-                            onChanged: (val) => setState(() => _selectedPropertyType = val!),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 12),
-                Row(
-                  children: [
-                    Expanded(child: _buildTextField(controller: _location, label: "Location")),
-                    const SizedBox(width: 12),
-                    Expanded(child: _buildTextField(controller: _pricing, label: "Pricing")),
-                  ],
-                ),
-                const SizedBox(height: 12),
-                Row(
-                  children: [
-                    Expanded(child: _buildTextField(controller: _bhk, label: "BHK Config")),
-                    const SizedBox(width: 12),
-                    Expanded(child: _buildTextField(controller: _size, label: "Property Size")),
-                  ],
-                ),
-                const SizedBox(height: 12),
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text("Interior Scope", style: GoogleFonts.plusJakartaSans(fontSize: 12, fontWeight: FontWeight.w600, color: AdminTheme.primaryDark)),
-                    const SizedBox(height: 6),
-                    DropdownButtonFormField<String>(
-                      value: _selectedScope,
-                      style: GoogleFonts.plusJakartaSans(fontSize: 13, color: AdminTheme.primaryDark),
-                      decoration: InputDecoration(
-                        isDense: true,
-                        filled: true,
-                        fillColor: const Color(0xFFFAF9F6),
-                        contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide(color: Colors.grey.shade300)),
-                        enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide(color: Colors.grey.shade300)),
-                        focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: AdminTheme.primaryAccent, width: 1.5)),
-                      ),
-                      items: _scopeOptions.map((s) => DropdownMenuItem(value: s, child: Text(s))).toList(),
-                      onChanged: (val) => setState(() => _selectedScope = val!),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 12),
-                _buildTextField(controller: _description, label: "Description", maxLines: 2),
-                const SizedBox(height: 16),
-                MediaPickerWidget(
-                  mediaList: _mediaItems,
-                  webUrlController: _urlController,
-                  onAddWebUrl: () {
-                    if (_urlController.text.trim().isNotEmpty) {
-                      setState(() {
-                        _mediaItems.add(
-                          MediaItem(url: _urlController.text.trim()),
-                        );
-                        _urlController.clear();
-                      });
-                    }
-                  },
-                  onMediaAdded: (items) => setState(() => _mediaItems.addAll(items)),
-                  onRemoveMedia: (idx) => setState(() => _mediaItems.removeAt(idx)),
-                ),
-                const SizedBox(height: 20),
-                SizedBox(
-                  width: double.infinity,
-                  height: 48,
-                  child: ElevatedButton(
-                    onPressed: _isLoading ? null : _addProject,
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: AdminTheme.primaryDark,
-                      foregroundColor: Colors.white,
-                      elevation: 2,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                    ),
-                    child: _isLoading
-                        ? const SizedBox(
-                      width: 20,
-                      height: 20,
-                      child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
-                    )
-                        : Text("PUBLISH PROJECT", style: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.bold, fontSize: 13, letterSpacing: 0.8)),
-                  ),
-                )
-              ],
-            ),
-          ),
-          const SizedBox(height: 24),
-          Container(
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: Colors.grey.shade200),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withOpacity(0.03),
-                  blurRadius: 15,
-                  offset: const Offset(0, 5),
-                ),
-              ],
-            ),
-            padding: const EdgeInsets.all(20),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text("Active Projects Summary (${AppDataStore.projects.length})", style: GoogleFonts.cinzel(fontSize: 16, fontWeight: FontWeight.bold, color: AdminTheme.primaryDark)),
-                const Divider(height: 20),
-                AppDataStore.projects.isEmpty
-                    ? Padding(
-                  padding: const EdgeInsets.all(16.0),
-                  child: Center(child: Text("No projects available.", style: GoogleFonts.plusJakartaSans(color: Colors.grey))),
-                )
-                    : ListView.separated(
-                  shrinkWrap: true,
-                  physics: const NeverScrollableScrollPhysics(),
-                  itemCount: AppDataStore.projects.length,
-                  separatorBuilder: (context, index) => const Divider(height: 1),
-                  itemBuilder: (context, idx) {
-                    final item = AppDataStore.projects[idx];
-                    final String displayUrl = item.imageUrls.isNotEmpty ? item.imageUrls.first : '';
-
-                    return ListTile(
-                      contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                      leading: Container(
-                        width: 50,
-                        height: 50,
-                        decoration: BoxDecoration(
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: ClipRRect(
-                          borderRadius: BorderRadius.circular(8),
-                          child: buildUniversalImage(MediaItem(url: displayUrl)),
-                        ),
-                      ),
-                      title: Text(
-                        item.title,
-                        style: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.bold, fontSize: 14),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                      subtitle: Text(
-                        "${item.propertyType} • ${item.location} • ${item.pricing}",
-                        style: GoogleFonts.plusJakartaSans(fontSize: 12, color: Colors.grey.shade600),
-                      ),
-                      trailing: IconButton(
-                        icon: const Icon(Icons.delete_outline_rounded, color: Colors.redAccent),
-                        onPressed: () => _deleteProject(item.id.toString(), idx),
-                      ),
-                    );
-                  },
-                )
-              ],
-            ),
-          )
-        ],
-      ),
-    );
-  }
-}
-
-// ==========================================
-// 2. PRODUCT DOMAIN MANAGEMENT SCREEN
-// ==========================================
-class ProductDomainManager extends StatefulWidget {
-  final VoidCallback onDataChanged;
-
-  const ProductDomainManager({super.key, required this.onDataChanged});
-
-  @override
-  State<ProductDomainManager> createState() => _ProductDomainManagerState();
-}
-
-class _ProductDomainManagerState extends State<ProductDomainManager> {
-  final _title = TextEditingController();
-  final _description = TextEditingController();
-  final _materialController = TextEditingController(text: "Premium Grade Material");
-  final _printTypeController = TextEditingController(text: "High Definition Digital Print / Finish");
-  final _urlController = TextEditingController();
-
-  bool _isLoading = false;
-
-  String _selectedCategory = 'Wallpapers';
-  final List<String> _categories = [
-    'Wallpapers', 'Floorings', 'Carpets', 'Blinds', 'Glass Films', 'Artificial Turfs',
-    'Gym Floorings', 'Awnings', 'Mosquito Nets', 'Upholstery', 'Curtains', 'Stretch Ceiling'
-  ];
-  final List<MediaItem> _mediaItems = [];
-
-  Future<void> _addProduct() async {
-    if (_title.text.trim().isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Product Title is required!")),
-      );
-      return;
-    }
-
-    setState(() {
-      _isLoading = true;
-    });
-
-    try {
-      String externalUrl = "";
-      Uint8List? rawBytes;
-
-      if (_mediaItems.isNotEmpty) {
-        final selectedMedia = _mediaItems.first;
-        if (selectedMedia.hasBytes) {
-          rawBytes = selectedMedia.bytes;
-        } else if (selectedMedia.url != null && selectedMedia.url!.isNotEmpty) {
-          externalUrl = selectedMedia.url!;
-        }
-      }
-
-      final Map<String, String> fields = {
-        "title": _title.text.trim(),
-        "category": _selectedCategory,
-        "description": _description.text.trim().isEmpty ? "High-quality decor item." : _description.text.trim(),
-        "material": _materialController.text.trim().isEmpty ? "Premium Grade Material" : _materialController.text.trim(),
-        "print_type": _printTypeController.text.trim().isEmpty ? "High Definition Digital Print / Finish" : _printTypeController.text.trim(),
-        "image_url": externalUrl,
-      };
-
-      final response = await OperationsApi.addProduct(
-        fields: fields,
-        imageBytes: rawBytes,
-        imageFileName:
-        _mediaItems.isNotEmpty ? _mediaItems.first.fileName : null,
-      );
-
-      if (!mounted) return;
-
-      if (response['status'] == 'success') {
-        final String finalImageUrl =
-        (response['image_url'] ??
-            response['imageUrl'] ??
-            externalUrl)
-            .toString()
-            .trim();
-
-        AppDataStore.products.add(
-          DecorProductItem(
-            id: response['id']?.toString() ?? '',
-            title: fields["title"]!,
-            category: fields["category"]!,
-            imageUrls: finalImageUrl.isNotEmpty ? [finalImageUrl] : [],
-            description: fields["description"]!,
-            material: fields["material"],
-            printType: fields["print_type"],
-          ),
-        );
-
-        _title.clear();
-        _description.clear();
-        _materialController.text = "Premium Grade Material";
-        _printTypeController.text = "High Definition Digital Print / Finish";
-        _mediaItems.clear();
-        _urlController.clear();
-
-        widget.onDataChanged();
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text("New product published successfully!")),
-        );
-      } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text("Failed to publish product: ${response['message']}")),
-        );
-      }
-    } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("Connection exception: $e")),
-      );
-    } finally {
-      if (mounted) {
-        setState(() {
-          _isLoading = false;
-        });
-      }
-    }
-  }
-
-  void _deleteProduct(String id, int index) {
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: Text("Delete Product", style: GoogleFonts.cinzel(fontWeight: FontWeight.bold)),
-        content: Text("Are you sure you want to delete '${AppDataStore.products[index].title}'?"),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text("CANCEL")),
-          TextButton(
-            onPressed: () async {
-              bool success = await OperationsApi.deleteProduct(id);
-              if (success && mounted) {
-                setState(() {
-                  AppDataStore.products.removeAt(index);
-                });
-                widget.onDataChanged();
-                Navigator.pop(ctx);
-                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Product deleted!")));
-              }
-            },
-            child: const Text("DELETE", style: TextStyle(color: Colors.redAccent)),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildTextField({required TextEditingController controller, required String label, int maxLines = 1}) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(label, style: GoogleFonts.plusJakartaSans(fontSize: 12, fontWeight: FontWeight.w600, color: AdminTheme.primaryDark)),
-        const SizedBox(height: 6),
-        TextField(
-          controller: controller,
-          maxLines: maxLines,
-          style: GoogleFonts.plusJakartaSans(fontSize: 13),
-          decoration: InputDecoration(
-            isDense: true,
-            filled: true,
-            fillColor: const Color(0xFFFAF9F6),
-            contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-            border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide(color: Colors.grey.shade300)),
-            enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide(color: Colors.grey.shade300)),
-            focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: AdminTheme.primaryAccent, width: 1.5)),
-          ),
-        ),
-      ],
-    );
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return SingleChildScrollView(
-      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
-      child: Column(
-        children: [
-          Container(
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: Colors.grey.shade200),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withOpacity(0.03),
-                  blurRadius: 15,
-                  offset: const Offset(0, 5),
-                ),
-              ],
-            ),
-            padding: const EdgeInsets.all(24),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text("Add New Product Catalog Entry", style: GoogleFonts.aleo(fontSize: 18, fontWeight: FontWeight.bold, color: AdminTheme.primaryDark)),
-                const SizedBox(height: 16),
-                _buildTextField(controller: _title, label: "Product Title *"),
-                const SizedBox(height: 12),
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text("Category Selection", style: GoogleFonts.plusJakartaSans(fontSize: 12, fontWeight: FontWeight.w600, color: AdminTheme.primaryDark)),
-                    const SizedBox(height: 6),
-                    DropdownButtonFormField<String>(
-                      value: _selectedCategory,
-                      style: GoogleFonts.plusJakartaSans(fontSize: 13, color: AdminTheme.primaryDark),
-                      decoration: InputDecoration(
-                        isDense: true,
-                        filled: true,
-                        fillColor: const Color(0xFFFAF9F6),
-                        contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide(color: Colors.grey.shade300)),
-                        enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide(color: Colors.grey.shade300)),
-                        focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: AdminTheme.primaryAccent, width: 1.5)),
-                      ),
-                      items: _categories.map((c) => DropdownMenuItem(value: c, child: Text(c))).toList(),
-                      onChanged: (val) => setState(() => _selectedCategory = val!),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 12),
-                _buildTextField(controller: _description, label: "Description", maxLines: 2),
-                const SizedBox(height: 12),
-                Row(
-                  children: [
-                    Expanded(child: _buildTextField(controller: _materialController, label: "Material Specification")),
-                    const SizedBox(width: 12),
-                    Expanded(child: _buildTextField(controller: _printTypeController, label: "Print / Finish Type")),
-                  ],
-                ),
-                const SizedBox(height: 16),
-                MediaPickerWidget(
-                  mediaList: _mediaItems,
-                  webUrlController: _urlController,
-                  onAddWebUrl: () {
-                    if (_urlController.text.trim().isNotEmpty) {
-                      setState(() {
-                        _mediaItems.add(
-                          MediaItem(url: _urlController.text.trim()),
-                        );
-                        _urlController.clear();
-                      });
-                    }
-                  },
-                  onMediaAdded: (items) => setState(() => _mediaItems.addAll(items)),
-                  onRemoveMedia: (idx) => setState(() => _mediaItems.removeAt(idx)),
-                ),
-                const SizedBox(height: 20),
-                SizedBox(
-                  width: double.infinity,
-                  height: 48,
-                  child: ElevatedButton(
-                    onPressed: _isLoading ? null : _addProduct,
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: AdminTheme.primaryDark,
-                      foregroundColor: Colors.white,
-                      elevation: 2,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                    ),
-                    child: _isLoading
-                        ? const SizedBox(
-                      width: 20,
-                      height: 20,
-                      child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
-                    )
-                        : Text("PUBLISH PRODUCT", style: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.bold, fontSize: 13, letterSpacing: 0.8)),
-                  ),
-                )
-              ],
-            ),
-          ),
-          const SizedBox(height: 24),
-          Container(
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: Colors.grey.shade200),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withOpacity(0.03),
-                  blurRadius: 15,
-                  offset: const Offset(0, 5),
-                ),
-              ],
-            ),
-            padding: const EdgeInsets.all(20),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text("Active Products Summary (${AppDataStore.products.length})", style: GoogleFonts.cinzel(fontSize: 16, fontWeight: FontWeight.bold, color: AdminTheme.primaryDark)),
-                const Divider(height: 20),
-                AppDataStore.products.isEmpty
-                    ? Padding(
-                  padding: const EdgeInsets.all(16.0),
-                  child: Center(child: Text("No products available.", style: GoogleFonts.plusJakartaSans(color: Colors.grey))),
-                )
-                    : ListView.separated(
-                  shrinkWrap: true,
-                  physics: const NeverScrollableScrollPhysics(),
-                  itemCount: AppDataStore.products.length,
-                  separatorBuilder: (context, index) => const Divider(height: 1),
-                  itemBuilder: (context, idx) {
-                    final item = AppDataStore.products[idx];
-                    final String displayUrl = item.imageUrls.isNotEmpty ? item.imageUrls.first : '';
-
-                    return ListTile(
-                      contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                      leading: Container(
-                        width: 50,
-                        height: 50,
-                        decoration: BoxDecoration(
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: ClipRRect(
-                          borderRadius: BorderRadius.circular(8),
-                          child: buildUniversalImage(MediaItem(url: displayUrl)),
-                        ),
-                      ),
-                      title: Text(item.title, style: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.bold, fontSize: 14), maxLines: 1, overflow: TextOverflow.ellipsis),
-                      subtitle: Text("${item.category} • ${item.material}", style: GoogleFonts.plusJakartaSans(fontSize: 12, color: Colors.grey.shade600)),
-                      trailing: IconButton(
-                        icon: const Icon(Icons.delete_outline_rounded, color: Colors.redAccent),
-                        onPressed: () => _deleteProduct(item.id, idx),
-                      ),
-                    );
-                  },
-                )
-              ],
-            ),
-          )
-        ],
-      ),
-    );
-  }
-}
-
-// ==========================================
-// 3. CLIENT DOMAIN MANAGEMENT SCREEN
-// ==========================================
-class ClientDomainManager extends StatefulWidget {
-  final VoidCallback onDataChanged;
-
-  const ClientDomainManager({super.key, required this.onDataChanged});
-
-  @override
-  State<ClientDomainManager> createState() => _ClientDomainManagerState();
-}
-
-class _ClientDomainManagerState extends State<ClientDomainManager> {
-  final _urlController = TextEditingController();
-  final List<MediaItem> _mediaItems = [];
-  bool _isLoading = false;
-
-  Future<void> _addClients() async {
-    if (_mediaItems.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Please attach an image file or provide an image link!")),
-      );
-      return;
-    }
-
-    setState(() {
-      _isLoading = true;
-    });
-
-    try {
-      for (var media in _mediaItems) {
-        final Uint8List? imageBytes = media.bytes;
-
-        final response = await OperationsApi.addClient(
-          imageUrl: media.url,
-          imageBytes: imageBytes,
-          imageFileName: media.fileName,
-        );
-
-        if (response['status'] == 'success') {
-          final uploadedUrl = response['img_url'] ?? response['image_url'] ?? media.url ?? '';
-
-          setState(() {
-            AppDataStore.clientLogos.add(
-              ClientItems(
-                id: response['id']?.toString() ?? '',
-                imgUrl: uploadedUrl,
-              ),
-            );
-          });
-        } else {
-          if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(content: Text(response['message'] ?? "Failed to save logo")),
-            );
-          }
-        }
-      }
-      widget.onDataChanged();
-
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text("Client logo(s) updated successfully!")),
-        );
-        setState(() {
-          _mediaItems.clear();
-          _urlController.clear();
-        });
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text("Error saving clients: $e")),
-        );
-      }
-    } finally {
-      if (mounted) {
-        setState(() {
-          _isLoading = false;
-        });
-      }
-    }
-  }
-
-  void _deleteClient(String id, int index) {
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: Text("Delete Client Logo", style: GoogleFonts.cinzel(fontWeight: FontWeight.bold)),
-        content: const Text("Are you sure you want to delete this client logo?"),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text("CANCEL")),
-          TextButton(
-            onPressed: () async {
-              bool success = await OperationsApi.deleteClient(id);
-              if (success && mounted) {
-                setState(() {
-                  AppDataStore.clientLogos.removeAt(index);
-                });
-                widget.onDataChanged();
-                Navigator.pop(ctx);
-                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Client logo deleted!")));
-              }
-            },
-            child: const Text("DELETE", style: TextStyle(color: Colors.redAccent)),
-          ),
-        ],
-      ),
-    );
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return SingleChildScrollView(
-      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
-      child: Column(
-        children: [
-          Container(
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: Colors.grey.shade200),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withOpacity(0.03),
-                  blurRadius: 15,
-                  offset: const Offset(0, 5),
-                ),
-              ],
-            ),
-            padding: const EdgeInsets.all(24),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text("Add Client Logos", style: GoogleFonts.aleo(fontSize: 18, fontWeight: FontWeight.bold, color: AdminTheme.primaryDark)),
-                const SizedBox(height: 16),
-                MediaPickerWidget(
-                  mediaList: _mediaItems,
-                  webUrlController: _urlController,
-                  onAddWebUrl: () {
-                    if (_urlController.text.trim().isNotEmpty) {
-                      setState(() {
-                        _mediaItems.add(
-                          MediaItem(url: _urlController.text.trim()),
-                        );
-                        _urlController.clear();
-                      });
-                    }
-                  },
-                  onMediaAdded: (items) => setState(() => _mediaItems.addAll(items)),
-                  onRemoveMedia: (idx) => setState(() => _mediaItems.removeAt(idx)),
-                ),
-                const SizedBox(height: 20),
-                SizedBox(
-                  width: double.infinity,
-                  height: 48,
-                  child: ElevatedButton(
-                    onPressed: _isLoading ? null : _addClients,
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: AdminTheme.primaryDark,
-                      foregroundColor: Colors.white,
-                      elevation: 2,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                    ),
-                    child: _isLoading
-                        ? const SizedBox(
-                      width: 20,
-                      height: 20,
-                      child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
-                    )
-                        : Text("SAVE CLIENT LOGOS", style: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.bold, fontSize: 13, letterSpacing: 0.8)),
-                  ),
-                )
-              ],
-            ),
-          ),
-          const SizedBox(height: 24),
-          Container(
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: Colors.grey.shade200),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withOpacity(0.03),
-                  blurRadius: 15,
-                  offset: const Offset(0, 5),
-                ),
-              ],
-            ),
-            padding: const EdgeInsets.all(20),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text("Active Client Logos (${AppDataStore.clientLogos.length})", style: GoogleFonts.cinzel(fontSize: 16, fontWeight: FontWeight.bold, color: AdminTheme.primaryDark)),
-                const Divider(height: 20),
-                AppDataStore.clientLogos.isEmpty
-                    ? Padding(
-                  padding: const EdgeInsets.all(16.0),
-                  child: Center(child: Text("No client logos available.", style: GoogleFonts.plusJakartaSans(color: Colors.grey))),
-                )
-                    : GridView.builder(
-                  shrinkWrap: true,
-                  physics: const NeverScrollableScrollPhysics(),
-                  gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                    crossAxisCount: 3,
-                    crossAxisSpacing: 12,
-                    mainAxisSpacing: 12,
-                  ),
-                  itemCount: AppDataStore.clientLogos.length,
-                  itemBuilder: (context, idx) {
-                    final item = AppDataStore.clientLogos[idx];
-                    return Stack(
-                      children: [
-                        Container(
-                          width: double.infinity,
-                          height: double.infinity,
-                          decoration: BoxDecoration(
-                            border: Border.all(color: Colors.grey.shade200),
-                            borderRadius: BorderRadius.circular(10),
-                          ),
-                          child: ClipRRect(
-                            borderRadius: BorderRadius.circular(10),
-                            child: buildUniversalImage(MediaItem(url: item.imgUrl)),
-                          ),
-                        ),
-                        Positioned(
-                          top: 6,
-                          right: 6,
-                          child: GestureDetector(
-                            onTap: () => _deleteClient(item.id, idx),
-                            child: const CircleAvatar(
-                              radius: 12,
-                              backgroundColor: Colors.redAccent,
-                              child: Icon(Icons.delete_rounded, size: 14, color: Colors.white),
-                            ),
-                          ),
-                        ),
-                      ],
-                    );
-                  },
-                )
-              ],
-            ),
-          )
-        ],
-      ),
     );
   }
 }
