@@ -10,6 +10,7 @@ import 'package:permission_handler/permission_handler.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'Api/Auth_Api.dart';
 import 'Helper_class.dart';
+import 'Safe_Net_img.dart';
 
 // ==========================================
 // LUXURY THEME COLORS & STYLES
@@ -61,22 +62,28 @@ String normalizeToAbsoluteImageUrl(String rawOrPartial) {
     return raw;
   }
 
-  // If already an absolute URL with correct base, return as is
-  if (raw.startsWith(OperationsApi.baseUrl)) {
+  // If it's already an absolute image.php URL, return as is
+  if (raw.contains('/image.php?path=')) {
+    debugPrint('✅ Already absolute image.php URL: $raw');
     return raw;
   }
 
-  // If already an absolute URL (any http/https) - fix the base URL
+  // If it's already an absolute URL (any http/https), return as is
   if (raw.startsWith('http://') || raw.startsWith('https://')) {
-    // Rebuild with our base URL
-    return OperationsApi.resolveImageUrl(raw);
+    debugPrint('✅ Already absolute HTTP(S) URL: $raw');
+    return raw;
   }
 
-  // If the API returned a path, resolve it
-  final resolved = OperationsApi.resolveImageUrl(raw);
+  // If it's a relative path, build the image.php URL
+  if (!raw.startsWith('/')) {
+    final imageUrl = '${OperationsApi.baseUrl}image.php?path=${Uri.encodeComponent(raw)}';
+    debugPrint('📸 Built image.php URL from relative path: $imageUrl');
+    return imageUrl;
+  }
 
-  // Final guard
-  return resolved;
+  // Final fallback
+  debugPrint('⚠️ Could not resolve image URL: $raw');
+  return '';
 }
 
 Widget buildUniversalImage(
@@ -142,32 +149,11 @@ Widget buildUniversalImage(
     return _imageFallback();
   }
 
-  return Image.network(
-    imageUrl,
-    fit: fit,
+  // 🔥 USE SafeNetworkImage INSTEAD of Image.network
+  return SafeNetworkImage(
+    url: imageUrl,
     width: width,
     height: height,
-    gaplessPlayback: true,
-    loadingBuilder: (context, child, progress) {
-      if (progress == null) return child;
-      return Center(
-        child: SizedBox(
-          width: 28,
-          height: 28,
-          child: CircularProgressIndicator(
-            strokeWidth: 2.0,
-            value: progress.expectedTotalBytes != null
-                ? progress.cumulativeBytesLoaded / progress.expectedTotalBytes!
-                : null,
-          ),
-        ),
-      );
-    },
-    errorBuilder: (context, error, stackTrace) {
-      debugPrint('❌ IMAGE LOAD ERROR: $imageUrl');
-      debugPrint('Error details: $error');
-      return _imageFallback();
-    },
   );
 }
 

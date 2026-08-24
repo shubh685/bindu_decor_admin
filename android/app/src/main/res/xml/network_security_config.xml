@@ -1,8 +1,15 @@
 <?xml version="1.0" encoding="utf-8"?>
 <network-security-config>
+    <!-- Development/Debug configurations -->
     <domain-config cleartextTrafficPermitted="true">
-        <domain includeSubdomains="false">192.168.1.54</domain>
+        <domain includeSubdomains="true">192.168.1.54</domain>
+        <domain includeSubdomains="true">10.0.2.2</domain>
+        <domain includeSubdomains="true">localhost</domain>
+        <domain includeSubdomains="true">127.0.0.1</domain>
     </domain-config>
-    <!-- Default config: disallow cleartext for others -->
-    <base-config cleartextTrafficPermitted="false" />
+
+    <!-- Production - Allow cleartext for specific IPs only -->
+    <domain-config cleartextTrafficPermitted="false">
+        <domain includeSubdomains="true">your-production-domain.com</domain>
+    </domain-config>
 </network-security-config>

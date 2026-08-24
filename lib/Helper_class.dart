@@ -1,21 +1,93 @@
+// Helper_class.dart
+
+// ==========================================
+// IMAGE URL RESOLUTION — routed through image.php
+// ==========================================
+// Same reasoning as OperationsApi.resolveImageUrl(): direct static files
+// under /uploads/ were failing with a connection-level error even though
+// the JSON APIs on the same host always succeed. Routing every image
+// through image.php makes image loads behave exactly like the working
+// JSON endpoints.
+
+const String _kBaseUrl = 'http://192.168.1.54/bindu_decor';
+
 String _resolveImageUrl(String raw) {
   var value = raw.trim();
   if (value.isEmpty) return '';
+
+  // Asset images - return as is
   if (value.startsWith('assets/')) return value;
+
+  // Data URIs - return as is
+  if (value.startsWith('data:image/')) return value;
+
+  // Already an image.php URL - return as is
+  if (value.contains('image.php?path=')) return value;
+
+  String cleanPath = value;
+
+  // If it's a full URL, extract just the path portion
   final uri = Uri.tryParse(value);
-  if (uri != null && (uri.scheme == 'http' || uri.scheme == 'https')) return value;
-  if (value.startsWith('//')) return 'https:$value';
-  value = value.replaceAll('\\', '/');
-  while (value.startsWith('/')) { value = value.substring(1); }
-  final origin = Uri.base;
-  final baseUrl = origin.host.isNotEmpty
-      ? '${origin.scheme.isEmpty ? 'http' : origin.scheme}://${origin.host}${origin.hasPort ? ':${origin.port}' : ''}/bindu_decor'
-      : 'http://192.168.1.15/bindu_decor';
-  if (value.toLowerCase().startsWith('bindu_decor/')) value = value.substring('bindu_decor/'.length);
-  if (value.toLowerCase().startsWith('uploads/')) return '$baseUrl/$value';
-  return '$baseUrl/uploads/$value';
+  if (uri != null && (uri.scheme == 'http' || uri.scheme == 'https')) {
+    cleanPath = uri.path;
+  } else if (value.startsWith('//')) {
+    // protocol-relative URL
+    final parsed = Uri.tryParse('https:$value');
+    cleanPath = parsed?.path ?? value;
+  }
+
+  cleanPath = _cleanPath(cleanPath);
+  if (cleanPath.isEmpty) return '';
+
+  final baseUrl = _getBaseUrl();
+  return '$baseUrl/image.php?path=${Uri.encodeComponent(cleanPath)}';
 }
 
+// Normalizes a raw path down to "uploads/filename.ext"
+String _cleanPath(String path) {
+  String clean = path.replaceAll('\\', '/');
+
+  while (clean.startsWith('/')) {
+    clean = clean.substring(1);
+  }
+
+  // Remove duplicate bindu_decor/
+  if (clean.toLowerCase().startsWith('bindu_decor/')) {
+    clean = clean.substring('bindu_decor/'.length);
+  }
+
+  // Remove duplicate uploads/uploads/
+  if (clean.toLowerCase().startsWith('uploads/uploads/')) {
+    clean = clean.substring('uploads/'.length);
+  }
+
+  // Ensure uploads/ prefix if path is not empty and doesn't already have it
+  if (clean.isNotEmpty && !clean.toLowerCase().startsWith('uploads/')) {
+    clean = 'uploads/$clean';
+  }
+
+  return clean;
+}
+
+// Get base URL with fallback
+String _getBaseUrl() {
+  try {
+    final origin = Uri.base;
+    if (origin.host.isNotEmpty && origin.host != 'localhost') {
+      final scheme = origin.scheme.isEmpty ? 'http' : origin.scheme;
+      final port = origin.hasPort ? ':${origin.port}' : '';
+      return '$scheme://${origin.host}$port/bindu_decor';
+    }
+  } catch (e) {
+    // Fallback to the configured URL
+  }
+  // Default fallback - change this to your actual server IP
+  return _kBaseUrl;
+}
+
+// ==========================================
+// PROJECT ITEM
+// ==========================================
 class ProjectItem {
   final String id;
   final String title;
@@ -48,18 +120,31 @@ class ProjectItem {
   });
 
   factory ProjectItem.fromMap(Map<String, dynamic> map) {
-    final rawImage = (map['image_url'] ?? map['imageUrl'] ?? map['img_url'] ?? '').toString().trim();
-    final rawImages = map['image_urls'] ?? map['imageUrls'];
+    String rawImage = '';
+    if (map['image_url'] != null && map['image_url'].toString().isNotEmpty) {
+      rawImage = map['image_url'].toString().trim();
+    } else if (map['imageUrl'] != null && map['imageUrl'].toString().isNotEmpty) {
+      rawImage = map['imageUrl'].toString().trim();
+    }
+
+    final rawImages = map['image_url'] ?? map['imageUrls'];
     final List<String> images = <String>[];
+
     if (rawImages is List) {
       for (final value in rawImages) {
         final text = value?.toString().trim() ?? '';
-        if (text.isNotEmpty) images.add(_resolveImageUrl(text));
+        if (text.isNotEmpty) {
+          final resolved = _resolveImageUrl(text);
+          if (resolved.isNotEmpty) images.add(resolved);
+        }
       }
     }
+
     if (rawImage.isNotEmpty) {
       final resolved = _resolveImageUrl(rawImage);
-      if (resolved.isNotEmpty && !images.contains(resolved)) images.insert(0, resolved);
+      if (resolved.isNotEmpty && !images.contains(resolved)) {
+        images.insert(0, resolved);
+      }
     }
 
     return ProjectItem(
@@ -83,6 +168,9 @@ class ProjectItem {
   List<String> get normalizedImageUrls => imageUrls.map(_resolveImageUrl).where((e) => e.isNotEmpty).toList();
 }
 
+// ==========================================
+// PRODUCT ITEM
+// ==========================================
 class DecorProductItem {
   final String id;
   final String title;
@@ -105,8 +193,15 @@ class DecorProductItem {
   });
 
   factory DecorProductItem.fromMap(Map<String, dynamic> map) {
-    final raw = (map['image_url'] ?? map['imageUrl'] ?? map['img_url'] ?? '').toString().trim();
-    final resolved = raw.isEmpty ? '' : _resolveImageUrl(raw);
+    String rawImage = '';
+    if (map['image_url'] != null && map['image_url'].toString().isNotEmpty) {
+      rawImage = map['image_url'].toString().trim();
+    } else if (map['imageUrl'] != null && map['imageUrl'].toString().isNotEmpty) {
+      rawImage = map['imageUrl'].toString().trim();
+    }
+
+    final resolved = rawImage.isEmpty ? '' : _resolveImageUrl(rawImage);
+
     return DecorProductItem(
       id: (map['id'] ?? '').toString(),
       title: (map['title'] ?? '').toString(),
@@ -122,6 +217,9 @@ class DecorProductItem {
   String get primaryImageUrl => imageUrl ?? (imageUrls.isNotEmpty ? imageUrls.first : '');
 }
 
+// ==========================================
+// CLIENT ITEM
+// ==========================================
 class ClientItems {
   final String id;
   final String? imgUrl;
@@ -136,13 +234,20 @@ class ClientItems {
   });
 
   factory ClientItems.fromMap(Map<String, dynamic> map) {
-    final raw = (map['img_url'] ?? map['image_url'] ?? map['imageUrl'] ?? '').toString().trim();
-    final resolved = raw.isEmpty ? '' : _resolveImageUrl(raw);
+    String rawImage = '';
+    if (map['img_url'] != null && map['img_url'].toString().isNotEmpty) {
+      rawImage = map['img_url'].toString().trim();
+    } else if (map['image_url'] != null && map['image_url'].toString().isNotEmpty) {
+      rawImage = map['image_url'].toString().trim();
+    }
+
+    final resolved = rawImage.isEmpty ? '' : _resolveImageUrl(rawImage);
+
     return ClientItems(
       id: (map['id'] ?? '').toString(),
-      imgUrl: resolved,
-      imageUrl: resolved,
-      imageUrlFull: resolved,
+      imgUrl: resolved.isEmpty ? null : resolved,
+      imageUrl: resolved.isEmpty ? null : resolved,
+      imageUrlFull: resolved.isEmpty ? null : resolved,
     );
   }
 

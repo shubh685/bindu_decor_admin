@@ -1,16 +1,4 @@
-// ==========================================
-// SAFE NETWORK IMAGE
-// ==========================================
-// Drop-in replacement for Image.network(url) that:
-//  - Shows a clear placeholder while loading
-//  - Retries once automatically on failure (helps with transient
-//    connection blips on flaky local Wi-Fi)
-//  - Prints a detailed, useful error (not just "statusCode: 0")
-//  - Lets you manually retry by tapping the broken-image icon
-//
-// Usage:
-//   SafeNetworkImage(url: client.primaryImageUrl, height: 80, width: 80)
-
+// Safe_Net_img.dart
 import 'package:flutter/material.dart';
 
 class SafeNetworkImage extends StatefulWidget {
@@ -18,7 +6,6 @@ class SafeNetworkImage extends StatefulWidget {
   final double? width;
   final double? height;
   final BoxFit fit;
-  final BorderRadius? borderRadius;
 
   const SafeNetworkImage({
     super.key,
@@ -26,7 +13,6 @@ class SafeNetworkImage extends StatefulWidget {
     this.width,
     this.height,
     this.fit = BoxFit.cover,
-    this.borderRadius,
   });
 
   @override
@@ -34,96 +20,110 @@ class SafeNetworkImage extends StatefulWidget {
 }
 
 class _SafeNetworkImageState extends State<SafeNetworkImage> {
-  int _retryCount = 0;
-  int _cacheBuster = 0;
+  bool _hasError = false;
+  String? _errorText;
+  int _retryToken = 0;
 
-  // Appends a cache-busting query param so a manual retry actually
-  // re-hits the network instead of returning a cached failure.
-  String get _effectiveUrl {
-    if (widget.url.isEmpty) return widget.url;
-    final sep = widget.url.contains('?') ? '&' : '?';
-    return _cacheBuster == 0
-        ? widget.url
-        : '${widget.url}${sep}retry=$_cacheBuster';
-  }
-
-  void _retry() {
-    setState(() {
-      _retryCount++;
-      _cacheBuster = DateTime.now().millisecondsSinceEpoch;
-    });
+  @override
+  void didUpdateWidget(covariant SafeNetworkImage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.url != widget.url) {
+      // New URL - give it a fresh chance instead of keeping old error state
+      _hasError = false;
+      _errorText = null;
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     if (widget.url.isEmpty) {
-      return _buildPlaceholder(icon: Icons.image_not_supported_outlined);
+      return _imageFallback('No image URL');
+    }
+    if (_hasError) {
+      return _imageFallback(_errorText ?? 'Image not found');
     }
 
-    Widget image = Image.network(
-      _effectiveUrl,
-      key: ValueKey('${widget.url}_$_cacheBuster'),
+    // _retryToken busts Flutter's internal image cache on manual retry
+    final key = ValueKey('${widget.url}#$_retryToken');
+
+    return Image.network(
+      widget.url,
+      key: key,
       width: widget.width,
       height: widget.height,
       fit: widget.fit,
-      loadingBuilder: (context, child, progress) {
-        if (progress == null) return child;
-        return _buildPlaceholder(loading: true);
+      loadingBuilder: (context, child, loadingProgress) {
+        if (loadingProgress == null) return child;
+        return _loadingPlaceholder();
       },
       errorBuilder: (context, error, stackTrace) {
-        // This is the useful diagnostic — check your console for it.
-        debugPrint(
-          'SafeNetworkImage load error for "${widget.url}" '
-              '(attempt ${_retryCount + 1}): $error',
-        );
-
-        // Auto-retry once, in case it was a transient network blip.
-        if (_retryCount == 0) {
-          WidgetsBinding.instance.addPostFrameCallback((_) => _retry());
-          return _buildPlaceholder(loading: true);
-        }
-
-        // After the auto-retry also fails, show a tappable error state.
-        return GestureDetector(
-          onTap: _retry,
-          child: _buildPlaceholder(
-            icon: Icons.refresh,
-            isError: true,
-          ),
-        );
+        // Print the FULL real error so root causes (SocketException,
+        // HandshakeException, 404, CORS, etc.) are visible in the console.
+        debugPrint('❌ Network image error for "${widget.url}": $error');
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) {
+            setState(() {
+              _hasError = true;
+              _errorText = error.toString();
+            });
+          }
+        });
+        return _loadingPlaceholder();
       },
     );
-
-    if (widget.borderRadius != null) {
-      image = ClipRRect(borderRadius: widget.borderRadius!, child: image);
-    }
-
-    return image;
   }
 
-  Widget _buildPlaceholder({
-    IconData icon = Icons.image_outlined,
-    bool loading = false,
-    bool isError = false,
-  }) {
+  Widget _loadingPlaceholder() {
     return Container(
       width: widget.width,
       height: widget.height,
-      alignment: Alignment.center,
-      decoration: BoxDecoration(
-        color: isError ? Colors.red.withOpacity(0.06) : Colors.grey.shade100,
-        borderRadius: widget.borderRadius,
+      color: Colors.grey.shade200,
+      child: const Center(
+        child: SizedBox(
+          width: 24,
+          height: 24,
+          child: CircularProgressIndicator(strokeWidth: 2),
+        ),
       ),
-      child: loading
-          ? const SizedBox(
-        width: 22,
-        height: 22,
-        child: CircularProgressIndicator(strokeWidth: 2),
-      )
-          : Icon(
-        icon,
-        color: isError ? Colors.redAccent : Colors.grey.shade400,
-        size: (widget.width ?? 40) * 0.4,
+    );
+  }
+
+  Widget _imageFallback(String reason) {
+    return Container(
+      width: widget.width,
+      height: widget.height,
+      color: Colors.grey.shade200,
+      child: Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(Icons.broken_image_rounded, color: Colors.grey, size: 28),
+            const SizedBox(height: 6),
+            Text(
+              'Image not found',
+              style: TextStyle(fontSize: 10, color: Colors.grey.shade600),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 4),
+            InkWell(
+              onTap: () {
+                setState(() {
+                  _hasError = false;
+                  _errorText = null;
+                  _retryToken++;
+                });
+              },
+              child: Text(
+                'Retry',
+                style: TextStyle(
+                  fontSize: 10,
+                  color: Colors.blue.shade700,
+                  decoration: TextDecoration.underline,
+                ),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

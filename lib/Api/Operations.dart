@@ -7,15 +7,21 @@ import 'package:http_parser/http_parser.dart';
 import 'package:bindu_decor_admin/Helper_class.dart';
 
 class OperationsApi {
-  // ⚠️ CHANGE THIS TO YOUR CORRECT URL
-  // For local machine testing: use localhost or 127.0.0.1
+  // ⚠️ CHANGE THIS TO YOUR ACTUAL SERVER URL
+  // For local testing on same PC: use localhost
   // For Android emulator: use 10.0.2.2
-  // For real device: use your PC's LAN IP
-  static const String baseUrl = 'http://localhost/bindu_decor/';
+  // For real device: use your PC's actual LAN IP
+  static const String baseUrl = 'http://192.168.1.54/bindu_decor/';
 
   // ==========================================
-  // FIXED IMAGE URL RESOLUTION
+  // IMAGE URL RESOLUTION — now routed through image.php
   // ==========================================
+  //
+  // Why: your JSON APIs (clients.php/projects.php/products.php) always
+  // return HTTP 200, but direct static files under /uploads/ were failing
+  // with statusCode 0 (a connection-level failure, not a 404). Serving
+  // images through image.php makes them behave exactly like your working
+  // JSON endpoints — same headers, same code path, same reliability.
 
   static String resolveImageUrl(String? imagePath) {
     if (imagePath == null || imagePath.isEmpty) return '';
@@ -23,40 +29,9 @@ class OperationsApi {
     String raw = imagePath.trim();
     print('🔍 RESOLVING IMAGE: "$raw"');
 
-    // Already a full URL with our baseUrl - return as is
-    if (raw.startsWith(baseUrl)) {
-      print('✅ Already has correct baseUrl: $raw');
+    // Data URI - return as is
+    if (raw.startsWith('data:image/')) {
       return raw;
-    }
-
-    // Already a full URL (any http/https) - strip it and rebuild
-    if (raw.startsWith('http://') || raw.startsWith('https://')) {
-      // Extract just the path part
-      final uri = Uri.tryParse(raw);
-      if (uri != null) {
-        String path = uri.path;
-        // Remove leading slashes
-        while (path.startsWith('/')) {
-          path = path.substring(1);
-        }
-        // Remove bindu_decor/ if present
-        if (path.startsWith('bindu_decor/')) {
-          path = path.substring('bindu_decor/'.length);
-        }
-        // Remove uploads/uploads/
-        if (path.startsWith('uploads/uploads/')) {
-          path = path.substring('uploads/'.length);
-        }
-
-        // Ensure uploads/ prefix
-        if (!path.startsWith('uploads/') && path.isNotEmpty) {
-          path = 'uploads/$path';
-        }
-
-        String fullUrl = '$baseUrl$path';
-        print('✅ Rebuilt URL: $fullUrl');
-        return fullUrl;
-      }
     }
 
     // Asset - return as is
@@ -64,24 +39,37 @@ class OperationsApi {
       return raw;
     }
 
-    // Data URI - return as is
-    if (raw.startsWith('data:image/')) {
+    // Already pointing at our image.php - return as is
+    if (raw.contains('image.php?path=')) {
+      print('✅ Already an image.php URL: $raw');
       return raw;
     }
 
-    // Clean the path - remove leading slashes
     String cleanPath = raw;
+
+    // If it's a full URL (any host), extract just the path portion
+    if (raw.startsWith('http://') || raw.startsWith('https://')) {
+      try {
+        final uri = Uri.parse(raw);
+        cleanPath = uri.path;
+      } catch (e) {
+        cleanPath = raw;
+      }
+    }
+
+    // Normalize
+    cleanPath = cleanPath.replaceAll('\\', '/');
     while (cleanPath.startsWith('/')) {
       cleanPath = cleanPath.substring(1);
     }
 
-    // Remove any duplicate bindu_decor/ prefixes
+    // Strip any duplicate bindu_decor/ or uploads/uploads/ prefixes
     List<String> prefixes = [
       'http://localhost/bindu_decor/',
       'http://127.0.0.1/bindu_decor/',
+      'http://10.0.2.2/bindu_decor/',
       'http://192.168.1.54/bindu_decor/',
       'bindu_decor/',
-      'uploads/'
     ];
     for (String prefix in prefixes) {
       if (cleanPath.toLowerCase().startsWith(prefix.toLowerCase())) {
@@ -89,27 +77,22 @@ class OperationsApi {
         break;
       }
     }
-
-    // Remove any remaining leading slashes
     while (cleanPath.startsWith('/')) {
       cleanPath = cleanPath.substring(1);
     }
-
-    // Remove duplicate uploads/
-    if (cleanPath.startsWith('uploads/uploads/')) {
+    if (cleanPath.toLowerCase().startsWith('uploads/uploads/')) {
       cleanPath = cleanPath.substring('uploads/'.length);
     }
-
-    // IMPORTANT: Don't add uploads/ if it already starts with uploads/
     if (!cleanPath.toLowerCase().startsWith('uploads/') && cleanPath.isNotEmpty) {
       cleanPath = 'uploads/$cleanPath';
     }
 
-    // Build final URL
-    String base = baseUrl.endsWith('/') ? baseUrl : '$baseUrl/';
-    String fullUrl = '$base$cleanPath';
+    if (cleanPath.isEmpty) return '';
 
-    print('✅ RESOLVED URL: $fullUrl');
+    String base = baseUrl.endsWith('/') ? baseUrl : '$baseUrl/';
+    final fullUrl = '${base}image.php?path=${Uri.encodeComponent(cleanPath)}';
+
+    print('✅ RESOLVED IMAGE URL: $fullUrl');
     return fullUrl;
   }
 
@@ -155,13 +138,10 @@ class OperationsApi {
         Uri.parse('${baseUrl}products.php?action=add'),
       );
 
-      // Add text fields
       request.fields.addAll(fields);
 
-      // Add image if present
       if (imageBytes != null && imageBytes.isNotEmpty) {
         final fileName = imageFileName ?? 'product.jpg';
-        // Derive subtype from filename extension if possible
         String subtype = 'jpeg';
         if (fileName.toLowerCase().endsWith('.png')) subtype = 'png';
         else if (fileName.toLowerCase().endsWith('.webp')) subtype = 'webp';
@@ -342,12 +322,10 @@ class OperationsApi {
         Uri.parse('${baseUrl}clients.php?action=add'),
       );
 
-      // Add image URL if provided
       if (imageUrl != null && imageUrl.isNotEmpty) {
         request.fields['image_url'] = imageUrl;
       }
 
-      // Add image bytes if provided
       if (imageBytes != null && imageBytes.isNotEmpty) {
         final fileName = imageFileName ?? 'client.jpg';
         String subtype = 'jpeg';
