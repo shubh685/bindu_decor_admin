@@ -2,6 +2,7 @@
 import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
+import 'package:flutter/cupertino.dart';
 import 'package:http/http.dart' as http;
 import 'package:http_parser/http_parser.dart';
 import 'package:bindu_decor_admin/Helper_class.dart';
@@ -16,13 +17,6 @@ class OperationsApi {
   // ==========================================
   // IMAGE URL RESOLUTION — now routed through image.php
   // ==========================================
-  //
-  // Why: your JSON APIs (clients.php/projects.php/products.php) always
-  // return HTTP 200, but direct static files under /uploads/ were failing
-  // with statusCode 0 (a connection-level failure, not a 404). Serving
-  // images through image.php makes them behave exactly like your working
-  // JSON endpoints — same headers, same code path, same reliability.
-
   static String resolveImageUrl(String? imagePath) {
     if (imagePath == null || imagePath.isEmpty) return '';
 
@@ -98,6 +92,46 @@ class OperationsApi {
 
   // Helper: check successful status codes (200 or 201)
   static bool _isSuccessStatus(int status) => status == 200 || status == 201;
+
+  // Update Product
+  static Future<Map<String, dynamic>> updateProduct({
+    required Map<String, String> fields,
+    Uint8List? imageBytes,
+    String? imageFileName,
+  }) async {
+    try {
+      final uri = Uri.parse("${baseUrl}products.php?action=update");
+      final request = http.MultipartRequest('POST', uri);
+
+      fields.forEach((key, value) {
+        request.fields[key] = value;
+      });
+
+      if (imageBytes != null && imageBytes.isNotEmpty) {
+        final fileName = imageFileName ?? 'product_image.jpg';
+        String subtype = 'jpeg';
+        if (fileName.toLowerCase().endsWith('.png')) subtype = 'png';
+        else if (fileName.toLowerCase().endsWith('.webp')) subtype = 'webp';
+        else if (fileName.toLowerCase().endsWith('.gif')) subtype = 'gif';
+
+        request.files.add(
+          http.MultipartFile.fromBytes(
+            'image_file',
+            imageBytes,
+            filename: fileName,
+            contentType: MediaType('image', subtype),
+          ),
+        );
+      }
+
+      final streamedResponse = await request.send();
+      final response = await http.Response.fromStream(streamedResponse);
+      return jsonDecode(response.body);
+    } catch (e) {
+      debugPrint("OperationsApi updateProduct error: $e");
+      return {'status': 'error', 'message': e.toString()};
+    }
+  }
 
   // ==========================================
   // PRODUCT OPERATIONS

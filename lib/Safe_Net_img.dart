@@ -95,7 +95,7 @@ class _SafeNetworkImageState extends State<SafeNetworkImage> {
       color: Colors.grey.shade200,
       child: Center(
         child: Column(
-          mainAxisSize: MainAxisSize.min,
+          mainAxisSize: MainAxisSize.max,
           children: [
             const Icon(Icons.broken_image_rounded, color: Colors.grey, size: 28),
             const SizedBox(height: 6),

@@ -25,20 +25,117 @@ class _ProductDomainManagerState extends State<ProductDomainManager> {
   final _materialController = TextEditingController(text: "Premium Grade Material");
   final _printTypeController = TextEditingController(text: "High Definition Digital Print / Finish");
   final _urlController = TextEditingController();
+  final _newCategoryController = TextEditingController();
 
   bool _isLoading = false;
+  DecorProductItem? _editingProduct;
 
-  String _selectedCategory = 'Wallpapers';
-  final List<String> _categories = [
-    'Wallpapers', 'Floorings', 'Carpets', 'Blinds', 'Glass Films', 'Artificial Turfs',
-    'Gym Floorings', 'Awnings', 'Mosquito Nets', 'Upholstery', 'Curtains', 'Stretch Ceiling'
-  ];
+  late String _selectedCategory;
+  List<String> _categories = ['Create New Category'];
   final List<MediaItem> _mediaItems = [];
 
-  Future<void> _addProduct() async {
+  @override
+  void initState() {
+    super.initState();
+    _loadCategoriesFromDatabase();
+  }
+
+  void _loadCategoriesFromDatabase() {
+    // Collect default categories
+    final Set<String> categorySet = {
+      'Wallpapers', 'Floorings', 'Carpets', 'Blinds', 'Glass Films', 'Artificial Turfs',
+      'Gym Floorings', 'Awnings', 'Mosquito Nets', 'Upholstery', 'Curtains', 'Stretch Ceiling'
+    };
+
+    // Dynamically pull distinct categories from loaded database products
+    for (var p in AppDataStore.products) {
+      if (p.category.trim().isNotEmpty) {
+        categorySet.add(p.category.trim());
+      }
+    }
+
+    setState(() {
+      _categories = ['Create New Category', ...categorySet.toList()..sort()];
+      _selectedCategory = _categories.length > 1 ? _categories[1] : 'Create New Category';
+    });
+  }
+
+  @override
+  void dispose() {
+    _title.dispose();
+    _description.dispose();
+    _materialController.dispose();
+    _printTypeController.dispose();
+    _urlController.dispose();
+    _newCategoryController.dispose();
+    super.dispose();
+  }
+
+  void _resetForm() {
+    _title.clear();
+    _description.clear();
+    _materialController.text = "Premium Grade Material";
+    _printTypeController.text = "High Definition Digital Print / Finish";
+    _mediaItems.clear();
+    _urlController.clear();
+    _newCategoryController.clear();
+    setState(() {
+      _editingProduct = null;
+      _selectedCategory = _categories.length > 1 ? _categories[1] : 'Create New Category';
+    });
+  }
+
+  void _editProduct(DecorProductItem item) {
+    setState(() {
+      _editingProduct = item;
+      _title.text = item.title;
+      if (!_categories.contains(item.category)) {
+        _categories.add(item.category);
+      }
+      _selectedCategory = item.category;
+      _description.text = item.description ?? '';
+      _materialController.text = item.material ?? "Premium Grade Material";
+      _printTypeController.text = item.printType ?? "High Definition Digital Print / Finish";
+      _mediaItems.clear();
+      if (item.imageUrls.isNotEmpty) {
+        _mediaItems.add(MediaItem(url: item.imageUrls.first));
+      }
+    });
+  }
+
+  void _addNewCategory() {
+    final newCategory = _newCategoryController.text.trim();
+    if (newCategory.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Please enter a category name!")),
+      );
+      return;
+    }
+
+    setState(() {
+      if (!_categories.contains(newCategory)) {
+        _categories.add(newCategory);
+      }
+      _selectedCategory = newCategory;
+      _newCategoryController.clear();
+    });
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text("Category '$newCategory' selected for this product!")),
+    );
+  }
+
+  Future<void> _saveProduct() async {
     if (_title.text.trim().isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text("Product Title is required!")),
+      );
+      return;
+    }
+
+    if (_selectedCategory == 'Create New Category') {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Please select or add a valid category!")),
       );
       return;
     }
@@ -69,49 +166,69 @@ class _ProductDomainManagerState extends State<ProductDomainManager> {
         "image_url": externalUrl,
       };
 
-      final response = await OperationsApi.addProduct(
+      if (_editingProduct != null) {
+        fields["id"] = _editingProduct!.id;
+      }
+
+      final response = _editingProduct == null
+          ? await OperationsApi.addProduct(
         fields: fields,
         imageBytes: rawBytes,
-        imageFileName:
-        _mediaItems.isNotEmpty ? _mediaItems.first.fileName : null,
+        imageFileName: _mediaItems.isNotEmpty ? _mediaItems.first.fileName : null,
+      )
+          : await OperationsApi.updateProduct(
+        fields: fields,
+        imageBytes: rawBytes,
+        imageFileName: _mediaItems.isNotEmpty ? _mediaItems.first.fileName : null,
       );
 
       if (!mounted) return;
 
       if (response['status'] == 'success') {
-        final String finalImageUrl =
-        (response['image_url'] ??
-            response['imageUrl'] ??
-            externalUrl)
-            .toString()
-            .trim();
+        final String finalImageUrl = (response['image_url'] ?? response['imageUrl'] ?? externalUrl).toString().trim();
 
-        AppDataStore.products.add(
-          DecorProductItem(
-            id: response['id']?.toString() ?? '',
-            title: fields["title"]!,
-            category: fields["category"]!,
-            imageUrls: finalImageUrl.isNotEmpty ? [finalImageUrl] : [],
-            description: fields["description"]!,
-            material: fields["material"],
-            printType: fields["print_type"],
-          ),
-        );
+        if (_editingProduct == null) {
+          AppDataStore.products.add(
+            DecorProductItem(
+              id: response['id']?.toString() ?? '',
+              title: fields["title"]!,
+              category: fields["category"]!,
+              imageUrls: finalImageUrl.isNotEmpty ? [finalImageUrl] : [],
+              description: fields["description"]!,
+              material: fields["material"],
+              printType: fields["print_type"],
+            ),
+          );
+        } else {
+          final idx = AppDataStore.products.indexWhere((p) => p.id == _editingProduct!.id);
+          if (idx != -1) {
+            AppDataStore.products[idx] = DecorProductItem(
+              id: _editingProduct!.id,
+              title: fields["title"]!,
+              category: fields["category"]!,
+              imageUrls: finalImageUrl.isNotEmpty
+                  ? [finalImageUrl]
+                  : _editingProduct!.imageUrls,
+              description: fields["description"]!,
+              material: fields["material"],
+              printType: fields["print_type"],
+            );
+          }
+        }
 
-        _title.clear();
-        _description.clear();
-        _materialController.text = "Premium Grade Material";
-        _printTypeController.text = "High Definition Digital Print / Finish";
-        _mediaItems.clear();
-        _urlController.clear();
+        // Permanently persist new category into the dropdown list in UI state
+        _loadCategoriesFromDatabase();
 
+        _resetForm();
         widget.onDataChanged();
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text("New product published successfully!")),
+          SnackBar(
+            content: Text(_editingProduct == null ? "New product published successfully!" : "Product updated successfully!"),
+          ),
         );
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text("Failed to publish product: ${response['message']}")),
+          SnackBar(content: Text("Failed to save product: ${response['message']}")),
         );
       }
     } catch (e) {
@@ -143,6 +260,7 @@ class _ProductDomainManagerState extends State<ProductDomainManager> {
               if (success && mounted) {
                 setState(() {
                   AppDataStore.products.removeAt(index);
+                  _loadCategoriesFromDatabase();
                 });
                 widget.onDataChanged();
                 Navigator.pop(ctx);
@@ -203,7 +321,21 @@ class _ProductDomainManagerState extends State<ProductDomainManager> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text("Add New Product Catalog Entry", style: GoogleFonts.aleo(fontSize: 18, fontWeight: FontWeight.bold, color: AdminTheme.primaryDark)),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      _editingProduct != null ? "Edit Product Entry" : "Add New Product Catalog Entry",
+                      style: GoogleFonts.aleo(fontSize: 18, fontWeight: FontWeight.bold, color: AdminTheme.primaryDark),
+                    ),
+                    if (_editingProduct != null)
+                      TextButton.icon(
+                        onPressed: _resetForm,
+                        icon: const Icon(Icons.add, size: 16),
+                        label: const Text("New Entry"),
+                      ),
+                  ],
+                ),
                 const SizedBox(height: 16),
                 _buildTextField(controller: _title, label: "Product Title *"),
                 const SizedBox(height: 12),
@@ -213,7 +345,7 @@ class _ProductDomainManagerState extends State<ProductDomainManager> {
                     Text("Category Selection", style: GoogleFonts.plusJakartaSans(fontSize: 12, fontWeight: FontWeight.w600, color: AdminTheme.primaryDark)),
                     const SizedBox(height: 6),
                     DropdownButtonFormField<String>(
-                      value: _selectedCategory,
+                      value: _categories.contains(_selectedCategory) ? _selectedCategory : _categories.first,
                       style: GoogleFonts.plusJakartaSans(fontSize: 13, color: AdminTheme.primaryDark),
                       decoration: InputDecoration(
                         isDense: true,
@@ -227,6 +359,40 @@ class _ProductDomainManagerState extends State<ProductDomainManager> {
                       items: _categories.map((c) => DropdownMenuItem(value: c, child: Text(c))).toList(),
                       onChanged: (val) => setState(() => _selectedCategory = val!),
                     ),
+                    if (_selectedCategory == 'Create New Category') ...[
+                      const SizedBox(height: 10),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: TextField(
+                              controller: _newCategoryController,
+                              style: GoogleFonts.plusJakartaSans(fontSize: 13),
+                              decoration: InputDecoration(
+                                hintText: "Enter new category name",
+                                isDense: true,
+                                filled: true,
+                                fillColor: const Color(0xFFFAF9F6),
+                                contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                                border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide(color: Colors.grey.shade300)),
+                                enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide(color: Colors.grey.shade300)),
+                                focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: AdminTheme.primaryAccent, width: 1.5)),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          ElevatedButton(
+                            onPressed: _addNewCategory,
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: AdminTheme.primaryAccent,
+                              foregroundColor: Colors.white,
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                            ),
+                            child: const Text("ADD"),
+                          ),
+                        ],
+                      ),
+                    ],
                   ],
                 ),
                 const SizedBox(height: 12),
@@ -261,7 +427,7 @@ class _ProductDomainManagerState extends State<ProductDomainManager> {
                   width: double.infinity,
                   height: 48,
                   child: ElevatedButton(
-                    onPressed: _isLoading ? null : _addProduct,
+                    onPressed: _isLoading ? null : _saveProduct,
                     style: ElevatedButton.styleFrom(
                       backgroundColor: AdminTheme.primaryDark,
                       foregroundColor: Colors.white,
@@ -274,7 +440,10 @@ class _ProductDomainManagerState extends State<ProductDomainManager> {
                       height: 20,
                       child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
                     )
-                        : Text("PUBLISH PRODUCT", style: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.bold, fontSize: 13, letterSpacing: 0.8)),
+                        : Text(
+                      _editingProduct != null ? "UPDATE PRODUCT" : "PUBLISH PRODUCT",
+                      style: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.bold, fontSize: 13, letterSpacing: 0.8),
+                    ),
                   ),
                 )
               ],
@@ -329,9 +498,18 @@ class _ProductDomainManagerState extends State<ProductDomainManager> {
                       ),
                       title: Text(item.title, style: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.bold, fontSize: 14), maxLines: 1, overflow: TextOverflow.ellipsis),
                       subtitle: Text("${item.category} • ${item.material}", style: GoogleFonts.plusJakartaSans(fontSize: 12, color: Colors.grey.shade600)),
-                      trailing: IconButton(
-                        icon: const Icon(Icons.delete_outline_rounded, color: Colors.redAccent),
-                        onPressed: () => _deleteProduct(item.id, idx),
+                      trailing: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          IconButton(
+                            icon: const Icon(Icons.edit_outlined, color: AdminTheme.primaryDark),
+                            onPressed: () => _editProduct(item),
+                          ),
+                          IconButton(
+                            icon: const Icon(Icons.delete_outline_rounded, color: Colors.redAccent),
+                            onPressed: () => _deleteProduct(item.id, idx),
+                          ),
+                        ],
                       ),
                     );
                   },

@@ -41,20 +41,23 @@ class _BlogsState extends State<Blogs> with AutomaticKeepAliveClientMixin {
   List<MediaItem> _selectedPhotos = [];
   BlogItem? _editingBlog;
   bool _isLoading = false;
-  String _selectedFilter = 'All'; // Filter options: 'All', 'Published', 'Draft'
 
   Timer? _timer;
   final ValueNotifier<DateTime> _liveTimeNotifier = ValueNotifier<DateTime>(DateTime.now());
 
   @override
-  bool get wantKeepAlive => true;
+  bool get wantKeepAlive => true; // Keeps state alive across parent tab switches
 
   @override
   void initState() {
     super.initState();
+
+    // Fetch initial data only if memory store is empty
     if (BlogDataStore.blogs.isEmpty) {
       _fetchBlogsFromApi();
     }
+
+    // Isolated live timer updates without calling setState()
     _timer = Timer.periodic(const Duration(seconds: 1), (_) {
       _liveTimeNotifier.value = DateTime.now();
     });
@@ -72,8 +75,10 @@ class _BlogsState extends State<Blogs> with AutomaticKeepAliveClientMixin {
     super.dispose();
   }
 
+  // Fetch All Blogs from PHP API safely
   Future<void> _fetchBlogsFromApi({bool forceRefresh = false}) async {
     if (_isLoading) return;
+
     if (mounted) setState(() => _isLoading = true);
 
     try {
@@ -112,73 +117,117 @@ class _BlogsState extends State<Blogs> with AutomaticKeepAliveClientMixin {
     });
   }
 
+  // Save/Update API Operations
   Future<void> _saveBlog(String status) async {
     if (!(_formKey.currentState?.validate() ?? false)) return;
 
-    final List<String> photoUrls = _selectedPhotos
-        .where((p) => p.url != null && p.url!.isNotEmpty)
-        .map((p) => p.url!)
-        .toList();
+    if (_selectedPhotos.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please add at least one blog image.'),
+        ),
+      );
+      return;
+    }
 
-    final Map<String, dynamic> requestData = {
-      "title": _titleController.text.trim(),
-      "subject": _subjectController.text.trim(),
-      "description": _descriptionController.text.trim(),
-      "author_name": _authorController.text.trim(),
-      "status": status,
-      "photos": photoUrls,
-    };
+    setState(() => _isLoading = true);
 
     try {
-      http.Response response;
+      final uri = Uri.parse(_apiEndpoint);
+      final request = http.MultipartRequest('POST', uri);
+
+      // ------------------------------------------------
+      // BASIC BLOG FIELDS
+      // ------------------------------------------------
+      request.fields['title'] = _titleController.text.trim();
+      request.fields['subject'] = _subjectController.text.trim();
+      request.fields['description'] = _descriptionController.text.trim();
+      request.fields['author_name'] = _authorController.text.trim();
+      request.fields['status'] = status;
+
       if (_editingBlog != null) {
-        requestData["id"] = _editingBlog!.id;
-        response = await http.put(
-          Uri.parse(_apiEndpoint),
-          headers: {"Content-Type": "application/json"},
-          body: jsonEncode(requestData),
-        );
-      } else {
-        response = await http.post(
-          Uri.parse(_apiEndpoint),
-          headers: {"Content-Type": "application/json"},
-          body: jsonEncode(requestData),
-        );
+        request.fields['id'] = _editingBlog!.id;
+        request.fields['_method'] = 'PUT';
       }
 
-      // Handle both HTTP 200 and HTTP 201 responses from the API
+      // ------------------------------------------------
+      // MEDIA HANDLING (FILES & URLS)
+      // ------------------------------------------------
+      int uploadIndex = 0;
+
+      for (final media in _selectedPhotos) {
+        // CASE 1: LOCAL IMAGE / FILE BYTES
+        if (media.hasBytes && media.bytes != null) {
+          final fileName = media.fileName?.isNotEmpty == true
+              ? media.fileName!
+              : 'blog_image_$uploadIndex.jpg';
+
+          request.files.add(
+            http.MultipartFile.fromBytes(
+              'images[]',
+              media.bytes!,
+              filename: fileName,
+            ),
+          );
+          uploadIndex++;
+        }
+        // CASE 2: EXTERNAL HTTP / HTTPS URL
+        else if (media.url != null && media.url!.trim().isNotEmpty) {
+          request.fields['external_urls[]'] = media.url!.trim();
+        }
+      }
+
+      final streamedResponse = await request.send();
+      final response = await http.Response.fromStream(streamedResponse);
+
+      debugPrint('BLOG API STATUS: ${response.statusCode}');
+      debugPrint('BLOG API RESPONSE: ${response.body}');
+
       if (response.statusCode == 200 || response.statusCode == 201) {
-        if (mounted) {
-          final actionMsg = _editingBlog != null
-              ? (status == 'Published' ? 'Blog updated and published successfully!' : 'Blog draft updated successfully!')
-              : (status == 'Published' ? 'Blog published successfully!' : 'Blog saved as draft successfully!');
+        final resData = jsonDecode(response.body);
+
+        if (resData['status'] == 'success') {
+          if (!mounted) return;
 
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: Text(actionMsg),
-              backgroundColor: Colors.green.shade800,
-              behavior: SnackBarBehavior.floating,
+              content: Text(
+                resData['message'] ??
+                    (_editingBlog != null
+                        ? 'Blog updated successfully'
+                        : 'Blog published successfully'),
+              ),
             ),
           );
+
+          _resetForm();
+          await _fetchBlogsFromApi(forceRefresh: true);
+          widget.onDataChanged();
+        } else {
+          throw Exception(resData['message'] ?? 'Blog operation failed');
         }
-        _resetForm();
-        await _fetchBlogsFromApi(forceRefresh: true);
-        widget.onDataChanged();
       } else {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text("Failed with status code: ${response.statusCode}"),
-              backgroundColor: Colors.redAccent,
-            ),
-          );
-        }
+        throw Exception('Server returned ${response.statusCode}: ${response.body}');
       }
     } catch (e) {
-      debugPrint("API Exception: $e");
+      debugPrint('BLOG SAVE ERROR: $e');
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            backgroundColor: Colors.redAccent,
+            content: Text('Failed to save blog: $e'),
+          ),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
     }
   }
 
+  // Delete API Operation
   Future<void> _deleteBlog(String id) async {
     try {
       final response = await http.delete(Uri.parse("$_apiEndpoint?id=$id"));
@@ -211,12 +260,8 @@ class _BlogsState extends State<Blogs> with AutomaticKeepAliveClientMixin {
   Widget build(BuildContext context) {
     super.build(context);
 
-    // Apply Filter (All, Published, Draft)
-    final filteredBlogs = BlogDataStore.blogs.where((blog) {
-      if (_selectedFilter == 'Published') return blog.status == 'Published';
-      if (_selectedFilter == 'Draft') return blog.status == 'Draft';
-      return true;
-    }).toList();
+    final draftBlogs = BlogDataStore.blogs.where((b) => b.status != 'Published').toList();
+    final publishedBlogs = BlogDataStore.blogs.where((b) => b.status == 'Published').toList();
 
     return Scaffold(
       backgroundColor: AdminTheme.bgCanvas,
@@ -225,6 +270,7 @@ class _BlogsState extends State<Blogs> with AutomaticKeepAliveClientMixin {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            // Screen Header
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
@@ -330,6 +376,7 @@ class _BlogsState extends State<Blogs> with AutomaticKeepAliveClientMixin {
                     ),
                     const SizedBox(height: 18),
 
+                    // Title & Subject Row
                     LayoutBuilder(
                       builder: (context, constraints) {
                         bool isMobile = constraints.maxWidth < 600;
@@ -343,7 +390,10 @@ class _BlogsState extends State<Blogs> with AutomaticKeepAliveClientMixin {
                                 controller: _titleController,
                                 label: "Blog Title (Main Subject)",
                                 hint: "e.g., Scaling Flutter Admin Apps",
-                                validator: (val) => val == null || val.trim().isEmpty ? "Title is required" : null,
+                                validator: (val) =>
+                                val == null || val.trim().isEmpty
+                                    ? "Title is required"
+                                    : null,
                               ),
                             ),
                             SizedBox(width: isMobile ? 0 : 16, height: isMobile ? 12 : 0),
@@ -353,7 +403,10 @@ class _BlogsState extends State<Blogs> with AutomaticKeepAliveClientMixin {
                                 controller: _subjectController,
                                 label: "Blog Subject",
                                 hint: "e.g., Software Development Journey",
-                                validator: (val) => val == null || val.trim().isEmpty ? "Subject is required" : null,
+                                validator: (val) =>
+                                val == null || val.trim().isEmpty
+                                    ? "Subject is required"
+                                    : null,
                               ),
                             ),
                           ],
@@ -362,21 +415,28 @@ class _BlogsState extends State<Blogs> with AutomaticKeepAliveClientMixin {
                     ),
                     const SizedBox(height: 14),
 
+                    // Author Name
                     _buildTextField(
                       controller: _authorController,
                       label: "Author Name",
                       hint: "e.g., Author Name",
-                      validator: (val) => val == null || val.trim().isEmpty ? "Author name is required" : null,
+                      validator: (val) =>
+                      val == null || val.trim().isEmpty
+                          ? "Author name is required"
+                          : null,
                     ),
                     const SizedBox(height: 14),
 
+                    // Media Picker Component
                     MediaPickerWidget(
                       mediaList: _selectedPhotos,
                       webUrlController: _webUrlController,
                       onAddWebUrl: () {
                         if (_webUrlController.text.trim().isNotEmpty) {
                           setState(() {
-                            _selectedPhotos.add(MediaItem(url: _webUrlController.text.trim()));
+                            _selectedPhotos.add(
+                              MediaItem(url: _webUrlController.text.trim()),
+                            );
                             _webUrlController.clear();
                           });
                         }
@@ -394,15 +454,20 @@ class _BlogsState extends State<Blogs> with AutomaticKeepAliveClientMixin {
                     ),
                     const SizedBox(height: 16),
 
+                    // Description
                     _buildTextField(
                       controller: _descriptionController,
                       label: "Blog Description",
                       hint: "Write detailed content here...",
                       maxLines: 4,
-                      validator: (val) => val == null || val.trim().isEmpty ? "Description is required" : null,
+                      validator: (val) =>
+                      val == null || val.trim().isEmpty
+                          ? "Description is required"
+                          : null,
                     ),
                     const SizedBox(height: 16),
 
+                    // Action Buttons
                     Wrap(
                       alignment: WrapAlignment.end,
                       crossAxisAlignment: WrapCrossAlignment.center,
@@ -416,20 +481,34 @@ class _BlogsState extends State<Blogs> with AutomaticKeepAliveClientMixin {
                           style: OutlinedButton.styleFrom(
                             foregroundColor: AdminTheme.primaryDark,
                             side: const BorderSide(color: AdminTheme.primaryDark),
-                            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 20,
+                              vertical: 14,
+                            ),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(10),
+                            ),
                           ),
                         ),
                         ElevatedButton.icon(
                           onPressed: () => _saveBlog('Published'),
                           icon: const Icon(Icons.publish_rounded, size: 18),
-                          label: Text(_editingBlog != null ? "Update & Publish" : "Publish Blog"),
+                          label: Text(
+                            _editingBlog != null
+                                ? "Update & Publish"
+                                : "Publish Blog",
+                          ),
                           style: ElevatedButton.styleFrom(
                             backgroundColor: AdminTheme.primaryAccent,
                             foregroundColor: AdminTheme.primaryDark,
                             elevation: 0,
-                            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 24,
+                              vertical: 14,
+                            ),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(10),
+                            ),
                           ),
                         ),
                       ],
@@ -440,47 +519,52 @@ class _BlogsState extends State<Blogs> with AutomaticKeepAliveClientMixin {
             ),
             const SizedBox(height: 30),
 
-            // Header & Draft/Published Filter View Toggle
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Text(
-                  "Blog Summary (${filteredBlogs.length})",
-                  style: GoogleFonts.aleo(
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                    color: AdminTheme.primaryDark,
+            // DRAFT BLOGS SECTION
+            if (draftBlogs.isNotEmpty) ...[
+              Row(
+                children: [
+                  Icon(Icons.edit_note_rounded, color: Colors.amber.shade900, size: 22),
+                  const SizedBox(width: 8),
+                  Text(
+                    "Drafted Blogs (${draftBlogs.length})",
+                    style: GoogleFonts.aleo(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                      color: AdminTheme.primaryDark,
+                    ),
                   ),
-                ),
-                Wrap(
-                  spacing: 6,
-                  children: ['All', 'Published', 'Draft'].map((filter) {
-                    final isSelected = _selectedFilter == filter;
-                    return ChoiceChip(
-                      label: Text(filter),
-                      selected: isSelected,
-                      onSelected: (bool selected) {
-                        if (selected) setState(() => _selectedFilter = filter);
-                      },
-                      selectedColor: AdminTheme.primaryDark,
-                      labelStyle: GoogleFonts.plusJakartaSans(
-                        fontSize: 12,
-                        color: isSelected ? Colors.white : AdminTheme.primaryDark,
-                        fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-                      ),
-                      backgroundColor: Colors.white,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                    );
-                  }).toList(),
-                ),
-              ],
+                ],
+              ),
+              const SizedBox(height: 14),
+              ListView.builder(
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+                itemCount: draftBlogs.length,
+                itemBuilder: (context, index) {
+                  return _buildSummaryCard(draftBlogs[index]);
+                },
+              ),
+              const SizedBox(height: 24),
+            ],
+
+            // PUBLISHED BLOGS SECTION
+            Text(
+              "Published Blogs (${publishedBlogs.length})",
+              style: GoogleFonts.aleo(
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+                color: AdminTheme.primaryDark,
+              ),
             ),
             const SizedBox(height: 14),
 
-            // Summary List Render with Condition Filter
             _isLoading
-                ? const Center(child: CircularProgressIndicator(color: AdminTheme.primaryAccent))
-                : filteredBlogs.isEmpty
+                ? const Center(
+              child: CircularProgressIndicator(
+                color: AdminTheme.primaryAccent,
+              ),
+            )
+                : publishedBlogs.isEmpty
                 ? Container(
               padding: const EdgeInsets.all(30),
               width: double.infinity,
@@ -491,18 +575,19 @@ class _BlogsState extends State<Blogs> with AutomaticKeepAliveClientMixin {
               ),
               child: Center(
                 child: Text(
-                  "No ${_selectedFilter.toLowerCase()} blog entries found.",
-                  style: GoogleFonts.plusJakartaSans(color: Colors.grey.shade600),
+                  "No published blogs yet.",
+                  style: GoogleFonts.plusJakartaSans(
+                    color: Colors.grey.shade600,
+                  ),
                 ),
               ),
             )
                 : ListView.builder(
               shrinkWrap: true,
               physics: const NeverScrollableScrollPhysics(),
-              itemCount: filteredBlogs.length,
+              itemCount: publishedBlogs.length,
               itemBuilder: (context, index) {
-                final blog = filteredBlogs[index];
-                return _buildSummaryCard(blog);
+                return _buildSummaryCard(publishedBlogs[index]);
               },
             ),
           ],
@@ -537,15 +622,30 @@ class _BlogsState extends State<Blogs> with AutomaticKeepAliveClientMixin {
           validator: validator,
           decoration: InputDecoration(
             hintText: hint,
-            hintStyle: GoogleFonts.plusJakartaSans(fontSize: 13, color: Colors.grey.shade400),
+            hintStyle: GoogleFonts.plusJakartaSans(
+              fontSize: 13,
+              color: Colors.grey.shade400,
+            ),
             filled: true,
             fillColor: const Color(0xFFFAF9F6),
-            contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-            border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide(color: Colors.grey.shade300)),
-            enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide(color: Colors.grey.shade300)),
+            contentPadding: const EdgeInsets.symmetric(
+              horizontal: 14,
+              vertical: 12,
+            ),
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(10),
+              borderSide: BorderSide(color: Colors.grey.shade300),
+            ),
+            enabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(10),
+              borderSide: BorderSide(color: Colors.grey.shade300),
+            ),
             focusedBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(10),
-              borderSide: const BorderSide(color: AdminTheme.primaryAccent, width: 1.5),
+              borderSide: const BorderSide(
+                color: AdminTheme.primaryAccent,
+                width: 1.5,
+              ),
             ),
           ),
         ),
@@ -588,8 +688,15 @@ class _BlogsState extends State<Blogs> with AutomaticKeepAliveClientMixin {
             child: ClipRRect(
               borderRadius: BorderRadius.circular(10),
               child: blog.photos.isNotEmpty
-                  ? buildUniversalImage(MediaItem(url: blog.photos.first), fit: BoxFit.cover)
-                  : const Icon(Icons.article_outlined, color: Colors.grey, size: 28),
+                  ? buildUniversalImage(
+                MediaItem(url: blog.photos.first),
+                fit: BoxFit.cover,
+              )
+                  : const Icon(
+                Icons.article_outlined,
+                color: Colors.grey,
+                size: 28,
+              ),
             ),
           ),
           const SizedBox(width: 14),
@@ -612,12 +719,19 @@ class _BlogsState extends State<Blogs> with AutomaticKeepAliveClientMixin {
                       ),
                     ),
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 4,
+                      ),
                       decoration: BoxDecoration(
-                        color: isPublished ? Colors.green.shade50 : Colors.amber.shade50,
+                        color: isPublished
+                            ? Colors.green.shade50
+                            : Colors.amber.shade50,
                         borderRadius: BorderRadius.circular(6),
                         border: Border.all(
-                          color: isPublished ? Colors.green.shade300 : Colors.amber.shade300,
+                          color: isPublished
+                              ? Colors.green.shade300
+                              : Colors.amber.shade300,
                         ),
                       ),
                       child: Text(
@@ -625,7 +739,9 @@ class _BlogsState extends State<Blogs> with AutomaticKeepAliveClientMixin {
                         style: GoogleFonts.plusJakartaSans(
                           fontSize: 10,
                           fontWeight: FontWeight.bold,
-                          color: isPublished ? Colors.green.shade800 : Colors.amber.shade900,
+                          color: isPublished
+                              ? Colors.green.shade800
+                              : Colors.amber.shade900,
                         ),
                       ),
                     ),
@@ -634,14 +750,20 @@ class _BlogsState extends State<Blogs> with AutomaticKeepAliveClientMixin {
                 const SizedBox(height: 4),
                 Text(
                   "By ${blog.authorName} • Subject: ${blog.subject}",
-                  style: GoogleFonts.plusJakartaSans(fontSize: 12, color: Colors.grey.shade600),
+                  style: GoogleFonts.plusJakartaSans(
+                    fontSize: 12,
+                    color: Colors.grey.shade600,
+                  ),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                 ),
                 const SizedBox(height: 4),
                 Text(
                   "Date & Time: $formattedDate",
-                  style: GoogleFonts.plusJakartaSans(fontSize: 11, color: Colors.grey.shade500),
+                  style: GoogleFonts.plusJakartaSans(
+                    fontSize: 11,
+                    color: Colors.grey.shade500,
+                  ),
                 ),
               ],
             ),
@@ -652,12 +774,20 @@ class _BlogsState extends State<Blogs> with AutomaticKeepAliveClientMixin {
             children: [
               IconButton(
                 onPressed: () => _editBlog(blog),
-                icon: const Icon(Icons.edit_outlined, size: 18, color: AdminTheme.primaryDark),
+                icon: const Icon(
+                  Icons.edit_outlined,
+                  size: 18,
+                  color: AdminTheme.primaryDark,
+                ),
                 tooltip: "Edit",
               ),
               IconButton(
                 onPressed: () => _deleteBlog(blog.id),
-                icon: const Icon(Icons.delete_outline_rounded, size: 18, color: Colors.redAccent),
+                icon: const Icon(
+                  Icons.delete_outline_rounded,
+                  size: 18,
+                  color: Colors.redAccent,
+                ),
                 tooltip: "Delete",
               ),
             ],
