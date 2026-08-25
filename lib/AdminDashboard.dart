@@ -1,12 +1,14 @@
 import 'dart:convert';
 
 import 'package:bindu_decor_admin/Api/Operations.dart';
+import 'package:bindu_decor_admin/Blogs.dart';
 import 'package:bindu_decor_admin/products.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:http/http.dart' as http;
 import 'package:image_picker/image_picker.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -49,6 +51,7 @@ class AppDataStore {
   static final List<ClientItems> clientLogos = [];
   static final List<ProjectItem> projects = [];
   static final List<DecorProductItem> products = [];
+  static List<BlogItem> get blogs => BlogDataStore.blogs;
 }
 
 // ==========================================
@@ -179,6 +182,8 @@ Widget _imageFallback() {
 
 // MAIN ADMIN DASHBOARD
 // ==========================================
+// MAIN ADMIN DASHBOARD
+// ==========================================
 class AdminDashboard extends StatefulWidget {
   const AdminDashboard({super.key});
 
@@ -193,7 +198,8 @@ class _AdminDashboardState extends State<AdminDashboard> with SingleTickerProvid
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 4, vsync: this);
+    // Updated length to 5 to accommodate the Blog tab
+    _tabController = TabController(length: 5, vsync: this);
     _loadAllData();
   }
 
@@ -209,20 +215,39 @@ class _AdminDashboardState extends State<AdminDashboard> with SingleTickerProvid
     });
 
     try {
-      // Load all data in parallel
+      // Load all data including blogs in parallel
       await Future.wait([
         _loadProjects(),
         _loadProducts(),
         _loadClients(),
+        _loadBlogs(),
       ]);
     } catch (e) {
-      print('Error loading data: $e');
+      debugPrint('Error loading data: $e');
     } finally {
       if (mounted) {
         setState(() {
           _isLoading = false;
         });
       }
+    }
+  }
+
+  Future<void> _loadBlogs() async {
+    try {
+      final response = await http.get(Uri.parse("http://192.168.1.54/bindu_decor/blogs.php"));
+      if (response.statusCode == 200) {
+        final resData = jsonDecode(response.body);
+        if (resData['status'] == 'success' && resData['data'] != null) {
+          final List list = resData['data'];
+          if (mounted) {
+            BlogDataStore.blogs.clear();
+            BlogDataStore.blogs.addAll(list.map((item) => BlogItem.fromJson(item)).toList());
+          }
+        }
+      }
+    } catch (e) {
+      debugPrint("Error loading blogs in AdminDashboard: $e");
     }
   }
 
@@ -277,7 +302,19 @@ class _AdminDashboardState extends State<AdminDashboard> with SingleTickerProvid
               child: const Icon(Icons.shield_outlined, color: AdminTheme.primaryAccent, size: 20),
             ),
             const SizedBox(width: 12),
-            Text("Admin Management Portal", overflow: TextOverflow.ellipsis, style: GoogleFonts.aleo(fontWeight: FontWeight.bold, fontSize: 20, letterSpacing: 1.0, color: Colors.white)),
+            Expanded(
+              child: Text(
+                "Admin Management Portal",
+                overflow: TextOverflow.ellipsis,
+                maxLines: 1,
+                style: GoogleFonts.aleo(
+                  fontWeight: FontWeight.bold,
+                  fontSize: 17.8,
+                  letterSpacing: 1.0,
+                  color: Colors.white,
+                ),
+              ),
+            ),
           ],
         ),
         bottom: TabBar(
@@ -293,7 +330,7 @@ class _AdminDashboardState extends State<AdminDashboard> with SingleTickerProvid
             Tab(icon: Icon(Icons.apartment_rounded), text: "Projects"),
             Tab(icon: Icon(Icons.category_rounded), text: "Products"),
             Tab(icon: Icon(Icons.people_alt_rounded), text: "Clients"),
-            Tab(icon: Icon(Icons.library_add_check_sharp), text: "Blog")
+            Tab(icon: Icon(Icons.library_add_check_sharp), text: "Blog"),
           ],
         ),
         actions: [
@@ -327,13 +364,14 @@ class _AdminDashboardState extends State<AdminDashboard> with SingleTickerProvid
               },
               child: Container(
                 height: 32,
-                decoration: BoxDecoration(
+                decoration: const BoxDecoration(
                   shape: BoxShape.circle,
                   color: Colors.white,
                 ),
-                  child: Icon(CupertinoIcons.person_crop_circle, size: 25, color: AdminTheme.primaryDark)),
+                child: const Icon(CupertinoIcons.person_crop_circle, size: 25, color: AdminTheme.primaryDark),
+              ),
             ),
-          )
+          ),
         ],
       ),
       body: _isLoading
@@ -354,6 +392,7 @@ class _AdminDashboardState extends State<AdminDashboard> with SingleTickerProvid
           ProjectDomainManager(onDataChanged: _refreshDashboard),
           ProductDomainManager(onDataChanged: _refreshDashboard),
           ClientDomainManager(onDataChanged: _refreshDashboard),
+          Blogs(onDataChanged: _refreshDashboard),
         ],
       ),
     );
@@ -495,6 +534,9 @@ void _showAccountPopup(BuildContext context) {
 // ==========================================
 // OVERVIEW DOMAIN MANAGER (SUMMARY & COUNTS)
 // ==========================================
+// ==========================================
+// OVERVIEW DOMAIN MANAGER (SUMMARY & COUNTS)
+// ==========================================
 class OverviewDomainManager extends StatelessWidget {
   final Function(int) onNavigateToTab;
 
@@ -505,12 +547,14 @@ class OverviewDomainManager extends StatelessWidget {
     final int projectCount = AppDataStore.projects.length;
     final int productCount = AppDataStore.products.length;
     final int clientCount = AppDataStore.clientLogos.length;
+    final int blogCount = AppDataStore.blogs.length; // Live count from BlogDataStore
 
     return SingleChildScrollView(
       padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          // Header
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
@@ -525,9 +569,11 @@ class OverviewDomainManager extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 20),
+
+          // Overview Metric Cards Grid
           LayoutBuilder(
             builder: (context, constraints) {
-              if (constraints.maxWidth < 650) {
+              if (constraints.maxWidth < 750) {
                 return Column(
                   children: [
                     _buildCountCard("Projects", projectCount, Icons.apartment_rounded, const Color(0xFF1E88E5), () => onNavigateToTab(1)),
@@ -535,6 +581,8 @@ class OverviewDomainManager extends StatelessWidget {
                     _buildCountCard("Products", productCount, Icons.category_rounded, const Color(0xFFFB8C00), () => onNavigateToTab(2)),
                     const SizedBox(height: 12),
                     _buildCountCard("Clients", clientCount, Icons.people_alt_rounded, const Color(0xFF43A047), () => onNavigateToTab(3)),
+                    const SizedBox(height: 12),
+                    _buildCountCard("Blogs", blogCount, Icons.library_add_check_sharp, const Color(0xFF8E24AA), () => onNavigateToTab(4)),
                   ],
                 );
               }
@@ -545,11 +593,15 @@ class OverviewDomainManager extends StatelessWidget {
                   Expanded(child: _buildCountCard("Products", productCount, Icons.category_rounded, const Color(0xFFFB8C00), () => onNavigateToTab(2))),
                   const SizedBox(width: 16),
                   Expanded(child: _buildCountCard("Clients", clientCount, Icons.people_alt_rounded, const Color(0xFF43A047), () => onNavigateToTab(3))),
+                  const SizedBox(width: 16),
+                  Expanded(child: _buildCountCard("Blogs", blogCount, Icons.library_add_check_sharp, const Color(0xFF8E24AA), () => onNavigateToTab(4))),
                 ],
               );
             },
           ),
           const SizedBox(height: 28),
+
+          // Recent Projects Section
           _buildSummarySection(
             title: "Recent Projects",
             itemCount: projectCount,
@@ -571,9 +623,7 @@ class OverviewDomainManager extends StatelessWidget {
                   leading: Container(
                     width: 50,
                     height: 50,
-                    decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(8),
-                    ),
+                    decoration: BoxDecoration(borderRadius: BorderRadius.circular(8)),
                     child: ClipRRect(
                       borderRadius: BorderRadius.circular(8),
                       child: buildUniversalImage(
@@ -589,6 +639,8 @@ class OverviewDomainManager extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 20),
+
+          // Recent Products Section
           _buildSummarySection(
             title: "Recent Products",
             itemCount: productCount,
@@ -610,9 +662,7 @@ class OverviewDomainManager extends StatelessWidget {
                   leading: Container(
                     width: 50,
                     height: 50,
-                    decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(8),
-                    ),
+                    decoration: BoxDecoration(borderRadius: BorderRadius.circular(8)),
                     child: ClipRRect(
                       borderRadius: BorderRadius.circular(8),
                       child: buildUniversalImage(
@@ -623,6 +673,56 @@ class OverviewDomainManager extends StatelessWidget {
                   ),
                   title: Text(item.title, style: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.bold, fontSize: 14), maxLines: 1, overflow: TextOverflow.ellipsis),
                   subtitle: Text(item.category, style: GoogleFonts.plusJakartaSans(fontSize: 12, color: Colors.grey.shade600)),
+                );
+              },
+            ),
+          ),
+          const SizedBox(height: 20),
+
+          // Recent Blogs Section
+          // ==========================================
+          _buildSummarySection(
+            title: "Recent Blogs",
+            itemCount: blogCount,
+            onViewAll: () => onNavigateToTab(4),
+            child: blogCount == 0
+                ? const Padding(
+              padding: EdgeInsets.all(16.0),
+              child: Center(child: Text("No blogs available.")),
+            )
+                : ListView.separated(
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              itemCount: blogCount > 3 ? 3 : blogCount,
+              separatorBuilder: (context, index) => const Divider(height: 1),
+              itemBuilder: (context, idx) {
+                final item = AppDataStore.blogs[idx];
+                return ListTile(
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                  leading: Container(
+                    width: 50,
+                    height: 50,
+                    decoration: BoxDecoration(borderRadius: BorderRadius.circular(8)),
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(8),
+                      child: buildUniversalImage(
+                        item.photos.isNotEmpty
+                            ? MediaItem(url: item.photos.first)
+                            : const MediaItem(url: ''),
+                        fit: BoxFit.cover,
+                      ),
+                    ),
+                  ),
+                  title: Text(
+                    item.title,
+                    style: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.bold, fontSize: 14),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  subtitle: Text(
+                    "${item.subject} • ${item.status}",
+                    style: GoogleFonts.plusJakartaSans(fontSize: 12, color: Colors.grey.shade600),
+                  ),
                 );
               },
             ),

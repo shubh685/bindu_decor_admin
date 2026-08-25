@@ -46,6 +46,7 @@ class Api {
 
   static Future<Map<String, dynamic>> sendOtp({
     required String email,
+    required String deviceTime,
   }) async {
 
     final response = await http.post(
@@ -59,6 +60,7 @@ class Api {
       body: jsonEncode({
         "action": "send_otp",
         "input": email.trim(),
+        "device_time": deviceTime,
       }),
     ).timeout(
       const Duration(seconds: 30),
@@ -76,6 +78,7 @@ class Api {
   static Future<Map<String, dynamic>> verifyOtp({
     required String email,
     required String otp,
+    required String deviceTime,
   }) async {
 
     final response = await http.post(
@@ -90,6 +93,7 @@ class Api {
         "action": "verify_otp",
         "input": email.trim(),
         "otp": otp.trim(),
+        "device_time": deviceTime,
       }),
     ).timeout(
       const Duration(seconds: 30),
@@ -107,6 +111,7 @@ class Api {
   static Future<Map<String, dynamic>> resetPassword({
     required String email,
     required String password,
+    required String deviceTime,
   }) async {
 
     final response = await http.post(
@@ -121,6 +126,7 @@ class Api {
         "action": "reset_password",
         "email": email.trim(),
         "password": password,
+        "device_time": deviceTime,
       }),
     ).timeout(
       const Duration(seconds: 30),

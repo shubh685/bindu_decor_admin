@@ -50,6 +50,17 @@ class _AdminAuthState extends State<AdminAuth> {
     super.dispose();
   }
 
+  /// Helper method to retrieve local device time in MySQL DATETIME format (YYYY-MM-DD HH:mm:ss)
+  String _getDeviceSyncTime() {
+    final now = DateTime.now();
+    return "${now.year.toString().padLeft(4, '0')}-"
+        "${now.month.toString().padLeft(2, '0')}-"
+        "${now.day.toString().padLeft(2, '0')} "
+        "${now.hour.toString().padLeft(2, '0')}:"
+        "${now.minute.toString().padLeft(2, '0')}:"
+        "${now.second.toString().padLeft(2, '0')}";
+  }
+
   void _switchAuthMode(AuthMode mode) {
     setState(() {
       _authMode = mode;
@@ -113,6 +124,8 @@ class _AdminAuthState extends State<AdminAuth> {
       _isLoading = true;
     });
 
+    final String deviceTime = _getDeviceSyncTime();
+
     try {
       // =================================================
       // SIGN IN
@@ -150,6 +163,7 @@ class _AdminAuthState extends State<AdminAuth> {
       if (_resetStep == ResetStep.enterEmail) {
         final data = await Api.sendOtp(
           email: _emailController.text.trim(),
+          deviceTime: deviceTime,
         );
 
         if (data['status'] == true) {
@@ -176,6 +190,7 @@ class _AdminAuthState extends State<AdminAuth> {
         final data = await Api.verifyOtp(
           email: _emailController.text.trim(),
           otp: _otpController.text.trim(),
+          deviceTime: deviceTime,
         );
 
         if (data['status'] == true) {
@@ -202,6 +217,7 @@ class _AdminAuthState extends State<AdminAuth> {
         final data = await Api.resetPassword(
           email: _emailController.text.trim(),
           password: _newPasswordController.text,
+          deviceTime: deviceTime,
         );
 
         if (data['status'] == true) {

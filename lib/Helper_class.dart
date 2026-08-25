@@ -9,6 +9,10 @@
 // through image.php makes image loads behave exactly like the working
 // JSON endpoints.
 
+import 'dart:convert';
+
+import 'AdminDashboard.dart';
+
 const String _kBaseUrl = 'http://192.168.1.54/bindu_decor';
 
 String _resolveImageUrl(String raw) {
@@ -252,4 +256,86 @@ class ClientItems {
   }
 
   String get primaryImageUrl => imageUrlFull ?? imageUrl ?? imgUrl ?? '';
+}
+
+// ==========================================
+// BLOG MODEL
+
+class BlogItem {
+  final String id;
+  final String title;
+  final String subject;
+  final String description;
+  final String authorName;
+  final String status;
+  final List<String> photos;
+  final DateTime? createdAt;
+  final DateTime? updatedAt;
+
+  BlogItem({
+    this.id = '',
+    this.title = '',
+    this.subject = '',
+    this.description = '',
+    this.authorName = '',
+    this.status = 'Draft',
+    this.photos = const <String>[],
+    this.createdAt,
+    this.updatedAt,
+  });
+
+  factory BlogItem.fromJson(Map<String, dynamic> json) {
+    // Process photos array and resolve image URLs properly
+    List<String> parsedPhotos = [];
+    if (json['photos'] != null) {
+      if (json['photos'] is List) {
+        parsedPhotos = (json['photos'] as List)
+            .map((img) => _resolveImageUrl(img.toString()))
+            .where((url) => url.isNotEmpty)
+            .toList();
+      } else if (json['photos'] is String) {
+        try {
+          final decoded = jsonDecode(json['photos']);
+          if (decoded is List) {
+            parsedPhotos = decoded
+                .map((img) => _resolveImageUrl(img.toString()))
+                .where((url) => url.isNotEmpty)
+                .toList();
+          }
+        } catch (_) {}
+      }
+    }
+
+    return BlogItem(
+      id: (json['id'] ?? '').toString(),
+      title: (json['title'] ?? '').toString(),
+      subject: (json['subject'] ?? '').toString(),
+      description: (json['description'] ?? '').toString(),
+      authorName: (json['author_name'] ?? json['authorName'] ?? '').toString(),
+      status: (json['status'] ?? 'Draft').toString(),
+      photos: parsedPhotos,
+      createdAt: json['created_at'] != null && json['created_at'].toString().isNotEmpty
+          ? DateTime.tryParse(json['created_at'].toString())
+          : null,
+      updatedAt: json['updated_at'] != null && json['updated_at'].toString().isNotEmpty
+          ? DateTime.tryParse(json['updated_at'].toString())
+          : null,
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'id': id,
+      'title': title,
+      'subject': subject,
+      'description': description,
+      'author_name': authorName,
+      'status': status,
+      'photos': photos,
+      'created_at': createdAt?.toIso8601String(),
+      'updated_at': updatedAt?.toIso8601String(),
+    };
+  }
+
+  String get primaryImageUrl => photos.isNotEmpty ? photos.first : '';
 }
