@@ -169,13 +169,15 @@ Widget _imageFallback() {
   return Container(
     color: Colors.grey.shade200,
     child: Center(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          const Icon(Icons.broken_image_rounded, color: Colors.grey, size: 28),
-          const SizedBox(height: 6),
-          Text('Image not found', style: TextStyle(fontSize: 10, color: Colors.grey.shade600)),
-        ],
+      child: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(Icons.broken_image_rounded, color: Colors.grey, size: 28),
+            const SizedBox(height: 6),
+            Text('Image not found', style: TextStyle(fontSize: 10, color: Colors.grey.shade600)),
+          ],
+        ),
       ),
     ),
   );

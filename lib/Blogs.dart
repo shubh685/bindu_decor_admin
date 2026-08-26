@@ -1,9 +1,11 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:http/http.dart' as http;
 import 'package:intl/intl.dart';
+import 'package:image_picker/image_picker.dart';
 
 import 'AdminDashboard.dart';
 import 'Helper_class.dart';
@@ -41,23 +43,22 @@ class _BlogsState extends State<Blogs> with AutomaticKeepAliveClientMixin {
   List<MediaItem> _selectedPhotos = [];
   BlogItem? _editingBlog;
   bool _isLoading = false;
+  bool _isSaving = false;
 
   Timer? _timer;
   final ValueNotifier<DateTime> _liveTimeNotifier = ValueNotifier<DateTime>(DateTime.now());
 
   @override
-  bool get wantKeepAlive => true; // Keeps state alive across parent tab switches
+  bool get wantKeepAlive => true;
 
   @override
   void initState() {
     super.initState();
 
-    // Fetch initial data only if memory store is empty
     if (BlogDataStore.blogs.isEmpty) {
       _fetchBlogsFromApi();
     }
 
-    // Isolated live timer updates without calling setState()
     _timer = Timer.periodic(const Duration(seconds: 1), (_) {
       _liveTimeNotifier.value = DateTime.now();
     });
@@ -75,7 +76,6 @@ class _BlogsState extends State<Blogs> with AutomaticKeepAliveClientMixin {
     super.dispose();
   }
 
-  // Fetch All Blogs from PHP API safely
   Future<void> _fetchBlogsFromApi({bool forceRefresh = false}) async {
     if (_isLoading) return;
 
@@ -119,6 +119,8 @@ class _BlogsState extends State<Blogs> with AutomaticKeepAliveClientMixin {
 
   // Save/Update API Operations
   Future<void> _saveBlog(String status) async {
+    if (_isSaving) return;
+
     if (!(_formKey.currentState?.validate() ?? false)) return;
 
     if (_selectedPhotos.isEmpty) {
@@ -130,15 +132,13 @@ class _BlogsState extends State<Blogs> with AutomaticKeepAliveClientMixin {
       return;
     }
 
-    setState(() => _isLoading = true);
+    setState(() => _isSaving = true);
 
     try {
       final uri = Uri.parse(_apiEndpoint);
       final request = http.MultipartRequest('POST', uri);
 
-      // ------------------------------------------------
       // BASIC BLOG FIELDS
-      // ------------------------------------------------
       request.fields['title'] = _titleController.text.trim();
       request.fields['subject'] = _subjectController.text.trim();
       request.fields['description'] = _descriptionController.text.trim();
@@ -150,9 +150,7 @@ class _BlogsState extends State<Blogs> with AutomaticKeepAliveClientMixin {
         request.fields['_method'] = 'PUT';
       }
 
-      // ------------------------------------------------
-      // MEDIA HANDLING (FILES & URLS)
-      // ------------------------------------------------
+      // MEDIA HANDLING
       int uploadIndex = 0;
 
       for (final media in _selectedPhotos) {
@@ -173,6 +171,13 @@ class _BlogsState extends State<Blogs> with AutomaticKeepAliveClientMixin {
         }
         // CASE 2: EXTERNAL HTTP / HTTPS URL
         else if (media.url != null && media.url!.trim().isNotEmpty) {
+          // Only send external URLs that are not local
+          if (media.url!.contains('http://192.168.1.4') ||
+              media.url!.contains('http://localhost') ||
+              media.url!.contains('image.php')) {
+            // Skip local URLs - they will be handled by the existing photos
+            continue;
+          }
           request.fields['external_urls[]'] = media.url!.trim();
         }
       }
@@ -222,12 +227,11 @@ class _BlogsState extends State<Blogs> with AutomaticKeepAliveClientMixin {
       }
     } finally {
       if (mounted) {
-        setState(() => _isLoading = false);
+        setState(() => _isSaving = false);
       }
     }
   }
 
-  // Delete API Operation
   Future<void> _deleteBlog(String id) async {
     try {
       final response = await http.delete(Uri.parse("$_apiEndpoint?id=$id"));
@@ -254,6 +258,28 @@ class _BlogsState extends State<Blogs> with AutomaticKeepAliveClientMixin {
       _authorController.text = blog.authorName;
       _selectedPhotos = blog.photos.map((p) => MediaItem(url: p)).toList();
     });
+  }
+
+  Future<void> _pickImages() async {
+    final ImagePicker picker = ImagePicker();
+    final List<XFile> images = await picker.pickMultiImage(
+      imageQuality: 80,
+    );
+
+    if (images.isNotEmpty) {
+      final List<MediaItem> newItems = [];
+      for (var img in images) {
+        final bytes = await img.readAsBytes();
+        newItems.add(MediaItem(
+          bytes: bytes,
+          fileName: img.name,
+        ));
+      }
+
+      setState(() {
+        _selectedPhotos.addAll(newItems);
+      });
+    }
   }
 
   @override
@@ -292,8 +318,10 @@ class _BlogsState extends State<Blogs> with AutomaticKeepAliveClientMixin {
                 Row(
                   children: [
                     IconButton(
-                      onPressed: () => _fetchBlogsFromApi(forceRefresh: true),
-                      icon: const Icon(Icons.refresh_rounded),
+                      onPressed: _isLoading ? null : () => _fetchBlogsFromApi(forceRefresh: true),
+                      icon: _isLoading
+                          ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2))
+                          : const Icon(Icons.refresh_rounded),
                       color: AdminTheme.primaryDark,
                       tooltip: "Refresh List",
                     ),
@@ -422,30 +450,7 @@ class _BlogsState extends State<Blogs> with AutomaticKeepAliveClientMixin {
                     const SizedBox(height: 14),
 
                     // Media Picker Component
-                    MediaPickerWidget(
-                      mediaList: _selectedPhotos,
-                      webUrlController: _webUrlController,
-                      onAddWebUrl: () {
-                        if (_webUrlController.text.trim().isNotEmpty) {
-                          setState(() {
-                            _selectedPhotos.add(
-                              MediaItem(url: _webUrlController.text.trim()),
-                            );
-                            _webUrlController.clear();
-                          });
-                        }
-                      },
-                      onMediaAdded: (newItems) {
-                        setState(() {
-                          _selectedPhotos.addAll(newItems);
-                        });
-                      },
-                      onRemoveMedia: (index) {
-                        setState(() {
-                          _selectedPhotos.removeAt(index);
-                        });
-                      },
-                    ),
+                    _buildMediaPicker(),
                     const SizedBox(height: 16),
 
                     // Description
@@ -469,8 +474,10 @@ class _BlogsState extends State<Blogs> with AutomaticKeepAliveClientMixin {
                       runSpacing: 12,
                       children: [
                         OutlinedButton.icon(
-                          onPressed: () => _saveBlog('Draft'),
-                          icon: const Icon(Icons.drafts_outlined, size: 18),
+                          onPressed: _isSaving ? null : () => _saveBlog('Draft'),
+                          icon: _isSaving
+                              ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
+                              : const Icon(Icons.drafts_outlined, size: 18),
                           label: const Text("Save as Draft"),
                           style: OutlinedButton.styleFrom(
                             foregroundColor: AdminTheme.primaryDark,
@@ -485,8 +492,10 @@ class _BlogsState extends State<Blogs> with AutomaticKeepAliveClientMixin {
                           ),
                         ),
                         ElevatedButton.icon(
-                          onPressed: () => _saveBlog('Published'),
-                          icon: const Icon(Icons.publish_rounded, size: 18),
+                          onPressed: _isSaving ? null : () => _saveBlog('Published'),
+                          icon: _isSaving
+                              ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
+                              : const Icon(Icons.publish_rounded, size: 18),
                           label: Text(
                             _editingBlog != null
                                 ? "Update & Publish"
@@ -642,6 +651,148 @@ class _BlogsState extends State<Blogs> with AutomaticKeepAliveClientMixin {
               ),
             ),
           ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildMediaPicker() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          "Blog Images (${_selectedPhotos.length})",
+          style: GoogleFonts.plusJakartaSans(
+            fontSize: 13,
+            fontWeight: FontWeight.bold,
+            color: AdminTheme.primaryDark,
+          ),
+        ),
+        const SizedBox(height: 10),
+
+        // Display selected images
+        if (_selectedPhotos.isNotEmpty)
+          Container(
+            height: 100,
+            padding: const EdgeInsets.symmetric(vertical: 8),
+            child: ListView.builder(
+              scrollDirection: Axis.horizontal,
+              itemCount: _selectedPhotos.length,
+              itemBuilder: (context, index) {
+                return Container(
+                  width: 100,
+                  margin: const EdgeInsets.only(right: 8),
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: Colors.grey.shade300),
+                  ),
+                  child: Stack(
+                    children: [
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(8),
+                        child: buildUniversalImage(
+                          _selectedPhotos[index],
+                          fit: BoxFit.cover,
+                          width: 100,
+                          height: 100,
+                        ),
+                      ),
+                      Positioned(
+                        top: 4,
+                        right: 4,
+                        child: GestureDetector(
+                          onTap: () {
+                            setState(() {
+                              _selectedPhotos.removeAt(index);
+                            });
+                          },
+                          child: Container(
+                            padding: const EdgeInsets.all(2),
+                            decoration: BoxDecoration(
+                              color: Colors.redAccent,
+                              shape: BoxShape.circle,
+                            ),
+                            child: const Icon(
+                              Icons.close,
+                              size: 16,
+                              color: Colors.white,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                );
+              },
+            ),
+          ),
+
+        // Add image buttons
+        Row(
+          children: [
+            ElevatedButton.icon(
+              onPressed: _pickImages,
+              icon: const Icon(Icons.image, size: 18),
+              label: const Text("Pick Images"),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.grey.shade200,
+                foregroundColor: AdminTheme.primaryDark,
+                elevation: 0,
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+              ),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Row(
+                children: [
+                  Expanded(
+                    child: TextFormField(
+                      controller: _webUrlController,
+                      decoration: InputDecoration(
+                        hintText: "Enter image URL",
+                        hintStyle: GoogleFonts.plusJakartaSans(
+                          fontSize: 12,
+                          color: Colors.grey.shade400,
+                        ),
+                        contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 8,
+                        ),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(8),
+                          borderSide: BorderSide(color: Colors.grey.shade300),
+                        ),
+                        enabledBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(8),
+                          borderSide: BorderSide(color: Colors.grey.shade300),
+                        ),
+                        focusedBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(8),
+                          borderSide: const BorderSide(
+                            color: AdminTheme.primaryAccent,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  IconButton(
+                    onPressed: () {
+                      if (_webUrlController.text.trim().isNotEmpty) {
+                        setState(() {
+                          _selectedPhotos.add(
+                            MediaItem(url: _webUrlController.text.trim()),
+                          );
+                          _webUrlController.clear();
+                        });
+                      }
+                    },
+                    icon: const Icon(Icons.add_circle, color: AdminTheme.primaryAccent),
+                  ),
+                ],
+              ),
+            ),
+          ],
         ),
       ],
     );

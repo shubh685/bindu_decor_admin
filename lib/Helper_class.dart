@@ -13,7 +13,7 @@ import 'dart:convert';
 
 import 'AdminDashboard.dart';
 
-const String _kBaseUrl = 'http://192.168.1.54/bindu_decor';
+const String _kBaseUrl = 'http://192.168.1.4/bindu_decor';
 
 String _resolveImageUrl(String raw) {
   var value = raw.trim();
@@ -285,25 +285,28 @@ class BlogItem {
   });
 
   factory BlogItem.fromJson(Map<String, dynamic> json) {
-    // Process photos array and resolve image URLs properly
     List<String> parsedPhotos = [];
     if (json['photos'] != null) {
+      List rawList = [];
       if (json['photos'] is List) {
-        parsedPhotos = (json['photos'] as List)
-            .map((img) => _resolveImageUrl(img.toString()))
-            .where((url) => url.isNotEmpty)
-            .toList();
+        rawList = json['photos'];
       } else if (json['photos'] is String) {
         try {
           final decoded = jsonDecode(json['photos']);
-          if (decoded is List) {
-            parsedPhotos = decoded
-                .map((img) => _resolveImageUrl(img.toString()))
-                .where((url) => url.isNotEmpty)
-                .toList();
-          }
+          if (decoded is List) rawList = decoded;
         } catch (_) {}
       }
+
+      parsedPhotos = rawList
+          .map((img) {
+        final str = img.toString().trim();
+        if (str.startsWith('http://') || str.startsWith('https://')) {
+          return str; // Keep full server URLs returned by public_image_url()
+        }
+        return _resolveImageUrl(str);
+      })
+          .where((url) => url.isNotEmpty)
+          .toList();
     }
 
     return BlogItem(
@@ -336,6 +339,4 @@ class BlogItem {
       'updated_at': updatedAt?.toIso8601String(),
     };
   }
-
-  String get primaryImageUrl => photos.isNotEmpty ? photos.first : '';
 }
