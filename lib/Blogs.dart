@@ -29,7 +29,7 @@ class _BlogsState extends State<Blogs> with AutomaticKeepAliveClientMixin {
   final _formKey = GlobalKey<FormState>();
 
   // API Base Endpoint
-  final String _apiEndpoint = "http://192.168.1.54/bindu_decor/blogs.php";
+  final String _apiEndpoint = "http://192.168.1.4/bindu_decor/blogs.php";
 
   // Controllers
   final TextEditingController _titleController = TextEditingController();
@@ -286,13 +286,7 @@ class _BlogsState extends State<Blogs> with AutomaticKeepAliveClientMixin {
                       ),
                     ),
                     const SizedBox(height: 4),
-                    Text(
-                      "Publish articles.",
-                      style: GoogleFonts.plusJakartaSans(
-                        fontSize: 13,
-                        color: Colors.grey.shade600,
-                      ),
-                    ),
+                    Text("Publish articles.", style: GoogleFonts.plusJakartaSans(fontSize: 13, color: Colors.grey.shade600,)),
                   ],
                 ),
                 Row(

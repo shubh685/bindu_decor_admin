@@ -12,7 +12,7 @@ class OperationsApi {
   // For local testing on same PC: use localhost
   // For Android emulator: use 10.0.2.2
   // For real device: use your PC's actual LAN IP
-  static const String baseUrl = 'http://192.168.1.54/bindu_decor/';
+  static const String baseUrl = 'http://192.168.1.4/bindu_decor/';
 
   // ==========================================
   // IMAGE URL RESOLUTION — now routed through image.php
@@ -62,7 +62,7 @@ class OperationsApi {
       'http://localhost/bindu_decor/',
       'http://127.0.0.1/bindu_decor/',
       'http://10.0.2.2/bindu_decor/',
-      'http://192.168.1.54/bindu_decor/',
+      'http://192.168.1.4/bindu_decor/',
       'bindu_decor/',
     ];
     for (String prefix in prefixes) {
