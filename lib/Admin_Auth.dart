@@ -475,14 +475,15 @@ class _AdminAuthState extends State<AdminAuth> {
   Widget _buildLeftSidebar() {
     return Stack(
       children: [
-        // Diagonal Layered Geometric Background Colors
+        // 1. Layered Backgrounds
         Container(color: LuxuryTheme.primaryDark),
         Positioned.fill(
           child: CustomPaint(
             painter: ImageBackgroundPainter(),
           ),
         ),
-        // Active Curved Tab Indicator
+
+        // 2. Active Curved Tab Indicator
         Positioned(
           top: 140,
           right: 0,
@@ -508,21 +509,75 @@ class _AdminAuthState extends State<AdminAuth> {
             ),
           ),
         ),
-        // Tab Action Items
-        Positioned(
-          top: 140,
-          left: 30,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Padding(
-                padding: const EdgeInsets.only(left: 40),
-                child: GestureDetector(
-                  onTap: () => _switchAuthMode(AuthMode.signIn),
-                  child: Text("SIGN IN", style: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.bold, color: Colors.white.withOpacity(_authMode == AuthMode.signIn ? 1.0 : 0.6), fontSize: 13, letterSpacing: 1.0)),
+
+        // 3. Responsive Content Section
+        Positioned.fill(
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              final double logoSize = constraints.maxHeight < 400 ? 60.0 : 80.0;
+              final double topPadding = constraints.maxHeight * 0.05;
+
+              return SafeArea(
+                child: SingleChildScrollView(
+                  physics: const ClampingScrollPhysics(),
+                  child: Padding(
+                    padding: EdgeInsets.only(top: topPadding, left: 24, right: 24),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.center,
+                      children: [
+                        // Responsive Logo Box
+                        Container(
+                          height: logoSize,
+                          width: logoSize * 1.15,
+                          padding: const EdgeInsets.all(8.0),
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.circular(15),
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black.withOpacity(0.15),
+                                blurRadius: 10,
+                                offset: const Offset(0, 4),
+                              ),
+                            ],
+                          ),
+                          child: ClipRRect(
+                            borderRadius: BorderRadius.circular(10),
+                            child: Image.asset(
+                              "assets/photos/bindu.png",
+                              fit: BoxFit.contain,
+                              errorBuilder: (context, error, stackTrace) => const Icon(
+                                Icons.business,
+                                color: LuxuryTheme.primaryDark,
+                              ),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+
+                        // Interactive Sign In Tab Action
+                        GestureDetector(
+                          onTap: () => _switchAuthMode(AuthMode.signIn),
+                          behavior: HitTestBehavior.opaque,
+                          child: AnimatedDefaultTextStyle(
+                            duration: const Duration(milliseconds: 200),
+                            style: GoogleFonts.plusJakartaSans(
+                              fontWeight: FontWeight.bold,
+                              color: Colors.white.withOpacity(
+                                _authMode == AuthMode.signIn ? 1.0 : 0.6,
+                              ),
+                              fontSize: 13,
+                              letterSpacing: 1.2,
+                            ),
+                            child: const Text("SIGN IN"),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
                 ),
-              ),
-            ],
+              );
+            },
           ),
         ),
       ],
