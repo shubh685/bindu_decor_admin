@@ -1,5 +1,6 @@
 import 'dart:convert';
 
+import 'package:bindu_decor_admin/Admin_Auth.dart';
 import 'package:bindu_decor_admin/Api/Operations.dart';
 import 'package:bindu_decor_admin/Blogs.dart';
 import 'package:bindu_decor_admin/products.dart';
@@ -399,101 +400,398 @@ class _AdminDashboardState extends State<AdminDashboard> with SingleTickerProvid
   }
 }
 
-Widget _accView(BuildContext context) {
-  return Material(
-    color: Colors.transparent,
-    child: Container(
-      width: 280,
-      padding: const EdgeInsets.all(18),
-      decoration: BoxDecoration(
-        color: AdminTheme.primaryDark,
-        borderRadius: BorderRadius.circular(15),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.25),
-            blurRadius: 20,
-            offset: const Offset(0, 8),
-          ),
-        ],
-        border: Border.all(
-          color: AdminTheme.primaryAccent.withOpacity(0.3),
-        ),
-      ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text("Admin Info", style: GoogleFonts.aleo(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.white)),
+// Helper method to trigger the Change Password Dialog Box
+// Helper method to trigger the Luxury Styled Change Password Dialog Box
+void _showChangePasswordDialog(BuildContext context, String userEmail) {
+  final oldPwdController = TextEditingController();
+  final newPwdController = TextEditingController();
+  final reconfirmPwdController = TextEditingController();
+  final formKey = GlobalKey<FormState>();
 
-          const SizedBox(height: 16),
+  bool isLoading = false;
+  bool obscureOld = true;
+  bool obscureNew = true;
+  bool obscureConfirm = true;
 
-          const Divider(color: Colors.white24),
+  showDialog(
+    context: context,
+    barrierDismissible: false,
+    builder: (context) {
+      return StatefulBuilder(
+        builder: (context, setDialogState) {
+          // Input field decoration builder matching AdminTheme
+          InputDecoration buildInputDecoration(String label, IconData icon, Widget? suffixIcon) {
+            return InputDecoration(
+              labelText: label,
+              labelStyle: GoogleFonts.plusJakartaSans(fontSize: 13, color: Colors.grey.shade600),
+              prefixIcon: Icon(icon, color: AdminTheme.primaryDark, size: 20),
+              suffixIcon: suffixIcon,
+              isDense: true,
+              filled: true,
+              fillColor: const Color(0xFFFAF9F6),
+              contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+              border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: Colors.grey.shade300)),
+              enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: Colors.grey.shade300)),
+              focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: AdminTheme.primaryAccent, width: 1.5)),
+              errorBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Colors.redAccent)),
+              focusedErrorBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Colors.redAccent, width: 1.5)),
+            );
+          }
 
-          const SizedBox(height: 10),
+          return Dialog(
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+            backgroundColor: Colors.white,
+            elevation: 10,
+            child: Container(
+              width: 400,
+              padding: const EdgeInsets.all(24),
+              child: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // Header Section
+                    Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(10),
+                          decoration: BoxDecoration(
+                            color: AdminTheme.primaryDark.withOpacity(0.08),
+                            shape: BoxShape.circle,
+                          ),
+                          child: const Icon(Icons.lock_reset_rounded, color: AdminTheme.primaryDark, size: 24),
+                        ),
+                        const SizedBox(width: 14),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                "Change Password",
+                                style: GoogleFonts.aleo(fontWeight: FontWeight.bold, fontSize: 18, color: AdminTheme.primaryDark),
+                              ),
+                              Text(
+                                "Update credentials for $userEmail",
+                                style: GoogleFonts.plusJakartaSans(fontSize: 11, color: Colors.grey.shade600),
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 18),
+                    const Divider(height: 1),
+                    const SizedBox(height: 20),
 
-          Row(
-            children: [
-              const Icon(
-                Icons.person_outline,
-                color: AdminTheme.primaryAccent,
-              ),
-              const SizedBox(width: 10),
-              Text("Shubham Shah", style: GoogleFonts.plusJakartaSans(color: Colors.white, fontSize: 14)),
-            ],
-          ),
-          const SizedBox(height: 14),
+                    // Form Inputs
+                    Form(
+                      key: formKey,
+                      child: Column(
+                        children: [
+                          // Old Password
+                          TextFormField(
+                            controller: oldPwdController,
+                            obscureText: obscureOld,
+                            style: GoogleFonts.plusJakartaSans(fontSize: 13, color: AdminTheme.primaryDark),
+                            decoration: buildInputDecoration(
+                              "Old Password",
+                              Icons.key_rounded,
+                              IconButton(
+                                icon: Icon(obscureOld ? Icons.visibility_off : Icons.visibility, color: Colors.grey.shade500, size: 18),
+                                onPressed: () => setDialogState(() => obscureOld = !obscureOld),
+                              ),
+                            ),
+                            validator: (val) => (val == null || val.isEmpty) ? "Enter old password" : null,
+                          ),
+                          const SizedBox(height: 14),
 
-          Row(
-            children: [
-              const Icon(Icons.email_outlined, color: AdminTheme.primaryAccent,),
-              const SizedBox(width: 10),
-              Text("admin@example.com", style: GoogleFonts.plusJakartaSans(color: Colors.white70, fontSize: 13)),
-            ],
-          ),
-          const SizedBox(height: 18),
+                          // New Password
+                          TextFormField(
+                            controller: newPwdController,
+                            obscureText: obscureNew,
+                            style: GoogleFonts.plusJakartaSans(fontSize: 13, color: AdminTheme.primaryDark),
+                            decoration: buildInputDecoration(
+                              "New Password",
+                              Icons.lock_outline_rounded,
+                              IconButton(
+                                icon: Icon(obscureNew ? Icons.visibility_off : Icons.visibility, color: Colors.grey.shade500, size: 18),
+                                onPressed: () => setDialogState(() => obscureNew = !obscureNew),
+                              ),
+                            ),
+                            validator: (val) {
+                              if (val == null || val.isEmpty) return "Enter new password";
+                              if (val.length < 6) return "Password must be at least 6 characters";
+                              return null;
+                            },
+                          ),
+                          const SizedBox(height: 14),
 
-          SizedBox(
-            width: double.infinity,
-            child: ElevatedButton.icon(
-              onPressed: () {
+                          // Reconfirm Password
+                          TextFormField(
+                            controller: reconfirmPwdController,
+                            obscureText: obscureConfirm,
+                            style: GoogleFonts.plusJakartaSans(fontSize: 13, color: AdminTheme.primaryDark),
+                            decoration: buildInputDecoration(
+                              "Reconfirm New Password",
+                              Icons.check_circle_outline_rounded,
+                              IconButton(
+                                icon: Icon(obscureConfirm ? Icons.visibility_off : Icons.visibility, color: Colors.grey.shade500, size: 18),
+                                onPressed: () => setDialogState(() => obscureConfirm = !obscureConfirm),
+                              ),
+                            ),
+                            validator: (val) {
+                              if (val != newPwdController.text) return "Passwords do not match";
+                              return null;
+                            },
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 24),
 
-              },
-              icon: const Icon(Icons.password, size: 18, color: Colors.black87),
-              label: const Text("Change Password"),
-              style: ElevatedButton.styleFrom(
-                foregroundColor: AdminTheme.primaryDark,
-                padding: const EdgeInsets.symmetric(vertical: 12),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(10),
+                    // Action Buttons
+                    Row(
+                      children: [
+                        Expanded(
+                          child: OutlinedButton(
+                            onPressed: isLoading ? null : () => Navigator.pop(context),
+                            style: OutlinedButton.styleFrom(
+                              padding: const EdgeInsets.symmetric(vertical: 14),
+                              side: BorderSide(color: Colors.grey.shade300),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                            ),
+                            child: Text(
+                              "CANCEL",
+                              style: GoogleFonts.plusJakartaSans(color: Colors.grey.shade700, fontWeight: FontWeight.bold, fontSize: 12),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: ElevatedButton(
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: AdminTheme.primaryDark,
+                              foregroundColor: Colors.white,
+                              elevation: 2,
+                              padding: const EdgeInsets.symmetric(vertical: 14),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                            ),
+                            onPressed: isLoading
+                                ? null
+                                : () async {
+                              if (formKey.currentState!.validate()) {
+                                setDialogState(() => isLoading = true);
+
+                                // Calls static method Api.changePassword
+                                final res = await Api.changePassword(
+                                  email: userEmail,
+                                  oldPassword: oldPwdController.text,
+                                  newPassword: newPwdController.text,
+                                );
+
+                                setDialogState(() => isLoading = false);
+
+                                if (context.mounted) {
+                                  Navigator.pop(context);
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    SnackBar(
+                                      content: Text(res['message'] ?? 'Password update status unknown'),
+                                      backgroundColor: res['status'] == true ? Colors.green.shade700 : Colors.redAccent,
+                                      behavior: SnackBarBehavior.floating,
+                                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                                    ),
+                                  );
+                                }
+                              }
+                            },
+                            child: isLoading
+                                ? const SizedBox(
+                              width: 18,
+                              height: 18,
+                              child: CircularProgressIndicator(color: AdminTheme.primaryAccent, strokeWidth: 2),
+                            )
+                                : Text(
+                              "UPDATE",
+                              style: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.bold, fontSize: 12, letterSpacing: 0.5),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
                 ),
               ),
             ),
-          ),
-          const SizedBox(height: 18),
-
-          SizedBox(
-            width: double.infinity,
-            child: ElevatedButton.icon(
-              onPressed: () {
-                // Logout
-              },
-              icon: const Icon(Icons.logout_rounded, size: 18),
-              label: const Text("Logout"),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: AdminTheme.primaryAccent,
-                foregroundColor: AdminTheme.primaryDark,
-                padding: const EdgeInsets.symmetric(vertical: 12),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(10),
-                ),
-              ),
-            ),
-          ),
-        ],
-      ),
-    ),
+          );
+        },
+      );
+    },
   );
 }
+
+// Updated _accView displaying dynamic data from Users table (via SharedPreferences)
+Widget _accView(BuildContext context) {
+  return FutureBuilder<SharedPreferences>(
+    future: SharedPreferences.getInstance(),
+    builder: (context, snapshot) {
+      final prefs = snapshot.data;
+      final String userName = prefs?.getString('user_name') ?? 'Admin User';
+      final String userEmail = prefs?.getString('user_email') ?? 'admin@example.com';
+
+      return Material(
+        color: Colors.transparent,
+        child: Container(
+          width: 280,
+          padding: const EdgeInsets.all(18),
+          decoration: BoxDecoration(
+            color: AdminTheme.primaryDark,
+            borderRadius: BorderRadius.circular(15),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.25),
+                blurRadius: 20,
+                offset: const Offset(0, 8),
+              ),
+            ],
+            border: Border.all(
+              color: AdminTheme.primaryAccent.withOpacity(0.3),
+            ),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text("Admin Info", style: GoogleFonts.aleo(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.white)),
+              const SizedBox(height: 16),
+              const Divider(color: Colors.white24),
+              const SizedBox(height: 10),
+
+              // Dynamic User Name
+              Row(
+                children: [
+                  const Icon(Icons.person_outline, color: AdminTheme.primaryAccent),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      userName,
+                      style: GoogleFonts.plusJakartaSans(color: Colors.white, fontSize: 14),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 14),
+
+              // Dynamic User Email
+              Row(
+                children: [
+                  const Icon(Icons.email_outlined, color: AdminTheme.primaryAccent),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      userEmail,
+                      style: GoogleFonts.plusJakartaSans(color: Colors.white70, fontSize: 13),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 18),
+
+              // Change Password Button
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton.icon(
+                  onPressed: () {
+                    _showChangePasswordDialog(context, userEmail);
+                  },
+                  icon: const Icon(Icons.password, size: 18, color: Colors.black87),
+                  label: const Text("Change Password"),
+                  style: ElevatedButton.styleFrom(
+                    foregroundColor: AdminTheme.primaryDark,
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 18),
+
+              // Logout Button
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton.icon(
+                  onPressed: () async {
+                    // 1. Show confirmation dialog before logging out
+                    final confirmLogout = await showDialog<bool>(
+                      context: context,
+                      builder: (context) => AlertDialog(
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                        title: Text(
+                          "Confirm Logout",
+                          style: GoogleFonts.plusJakartaSans(
+                            fontWeight: FontWeight.bold,
+                            color: AdminTheme.primaryDark,
+                          ),
+                        ),
+                        content: Text(
+                          "Are you sure you want to end your current session?",
+                          style: GoogleFonts.plusJakartaSans(fontSize: 13, color: Colors.grey.shade700),
+                        ),
+                        actions: [
+                          TextButton(
+                            onPressed: () => Navigator.pop(context, false),
+                            child: Text(
+                              "CANCEL",
+                              style: GoogleFonts.plusJakartaSans(color: Colors.grey.shade600, fontWeight: FontWeight.bold),
+                            ),
+                          ),
+                          ElevatedButton(
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: Colors.redAccent,
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                            ),
+                            onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (context) => AdminAuth())),
+                            child: Text("LOGOUT", style: GoogleFonts.plusJakartaSans(color: Colors.white, fontWeight: FontWeight.bold),),
+                          ),
+                        ],
+                      ),
+                    );
+
+                    // 2. Perform logout if confirmed
+                    if (confirmLogout == true) {
+                      final prefs = await SharedPreferences.getInstance();
+
+                      // Clear all stored credentials and session flags
+                      await prefs.clear();
+                      // Note: Use prefs.remove('isLoggedIn') if you only want to delete specific keys
+
+                      if (!context.mounted) return;
+
+                    }
+                  },
+                  icon: const Icon(Icons.logout_rounded, size: 18),
+                  label: const Text("Logout"),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AdminTheme.primaryAccent,
+                    foregroundColor: AdminTheme.primaryDark,
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    },
+  );
+}
+
 
 void _showAccountPopup(BuildContext context) {
   final overlay = Overlay.of(context);

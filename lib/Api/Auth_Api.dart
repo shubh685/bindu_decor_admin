@@ -183,4 +183,30 @@ class Api {
 
     return _parseResponse(response);
   }
+
+  // =====================================================
+// CHANGE PASSWORD
+// =====================================================
+  static Future<Map<String, dynamic>> changePassword({
+    required String email,
+    required String oldPassword,
+    required String newPassword,
+  }) async {
+    final response = await http.post(
+      Uri.parse("$baseUrl/change_pwd.php"),
+      headers: {
+        "Content-Type": "application/json",
+        "Accept": "application/json",
+      },
+      body: jsonEncode({
+        "email": email.trim(),
+        "password": oldPassword,
+        "new_password": newPassword,
+      }),
+    ).timeout(
+      const Duration(seconds: 30),
+    );
+
+    return _parseResponse(response);
+  }
 }

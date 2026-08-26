@@ -287,7 +287,7 @@ class _BlogsState extends State<Blogs> with AutomaticKeepAliveClientMixin {
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      "Publish articles and software development updates",
+                      "Publish articles.",
                       style: GoogleFonts.plusJakartaSans(
                         fontSize: 13,
                         color: Colors.grey.shade600,
