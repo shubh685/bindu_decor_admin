@@ -1,8 +1,5 @@
-// ==========================================
-// 1. PROJECT DOMAIN MANAGEMENT SCREEN
-// ==========================================
+import 'dart:convert';
 import 'dart:typed_data';
-
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
@@ -62,20 +59,19 @@ class _ProjectDomainManagerState extends State<ProjectDomainManager> {
     });
 
     try {
-      String externalUrl = "";
-      Uint8List? rawBytes;
+      List<String> externalUrls = [];
+      List<Uint8List> fileBytesList = [];
 
-      if (_mediaItems.isNotEmpty) {
-        final selectedMedia = _mediaItems.first;
-        if (selectedMedia.hasBytes) {
-          rawBytes = selectedMedia.bytes;
-        } else if (selectedMedia.url != null && selectedMedia.url!.isNotEmpty) {
-          externalUrl = selectedMedia.url!;
+      for (var media in _mediaItems) {
+        if (media.hasBytes && media.bytes != null) {
+          fileBytesList.add(media.bytes!);
+        } else if (media.url != null && media.url!.trim().isNotEmpty) {
+          externalUrls.add(media.url!.trim());
         }
       }
 
-      if (externalUrl.isEmpty && rawBytes == null) {
-        externalUrl = "https://images.unsplash.com/photo-1618221195710-dd6b41faaea6?w=800";
+      if (externalUrls.isEmpty && fileBytesList.isEmpty) {
+        externalUrls.add("https://images.unsplash.com/photo-1618221195710-dd6b41faaea6?w=800");
       }
 
       final Map<String, String> fields = {
@@ -88,25 +84,26 @@ class _ProjectDomainManagerState extends State<ProjectDomainManager> {
         "property_type": _selectedPropertyType,
         "size": _size.text.trim().isEmpty ? "2000 sq ft" : _size.text.trim(),
         "description": _description.text.trim().isEmpty ? "No description provided." : _description.text.trim(),
-        "image_url": externalUrl,
+        "external_urls": jsonEncode(externalUrls),
       };
 
       final response = await OperationsApi.addProject(
         fields: fields,
-        imageBytes: rawBytes,
-        imageFileName:
-        _mediaItems.isNotEmpty ? _mediaItems.first.fileName : null,
+        imageBytes: fileBytesList.isNotEmpty ? fileBytesList.first : null,
+        imageFileName: _mediaItems.isNotEmpty ? _mediaItems.first.fileName : null,
       );
 
       if (!mounted) return;
 
       if (response['status'] == 'success') {
-        final String finalImageUrl =
-        (response['image_url'] ??
-            response['imageUrl'] ??
-            externalUrl)
-            .toString()
-            .trim();
+        List<String> finalUrls = [];
+        if (response['image_urls'] is List) {
+          finalUrls = List<String>.from(response['image_urls']);
+        } else if (response['image_url'] != null) {
+          finalUrls = [response['image_url'].toString()];
+        } else {
+          finalUrls = externalUrls;
+        }
 
         AppDataStore.projects.add(
           ProjectItem.fromMap({
@@ -120,7 +117,8 @@ class _ProjectDomainManagerState extends State<ProjectDomainManager> {
             "property_type": fields["property_type"],
             "size": fields["size"],
             "description": fields["description"],
-            "image_url": finalImageUrl,
+            "image_url": jsonEncode(finalUrls),
+            "image_urls": finalUrls,
           }),
         );
 

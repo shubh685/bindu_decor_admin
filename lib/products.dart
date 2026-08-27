@@ -1,6 +1,4 @@
-// ==========================================
-// 2. PRODUCT DOMAIN MANAGEMENT SCREEN
-// ==========================================
+import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
@@ -41,13 +39,11 @@ class _ProductDomainManagerState extends State<ProductDomainManager> {
   }
 
   void _loadCategoriesFromDatabase() {
-    // Collect default categories
     final Set<String> categorySet = {
       'Wallpapers', 'Floorings', 'Carpets', 'Blinds', 'Glass Films', 'Artificial Turfs',
       'Gym Floorings', 'Awnings', 'Mosquito Nets', 'Upholstery', 'Curtains', 'Stretch Ceiling'
     };
 
-    // Dynamically pull distinct categories from loaded database products
     for (var p in AppDataStore.products) {
       if (p.category.trim().isNotEmpty) {
         categorySet.add(p.category.trim());
@@ -97,8 +93,8 @@ class _ProductDomainManagerState extends State<ProductDomainManager> {
       _materialController.text = item.material ?? "Premium Grade Material";
       _printTypeController.text = item.printType ?? "High Definition Digital Print / Finish";
       _mediaItems.clear();
-      if (item.imageUrls.isNotEmpty) {
-        _mediaItems.add(MediaItem(url: item.imageUrls.first));
+      for (var url in item.imageUrls) {
+        _mediaItems.add(MediaItem(url: url));
       }
     });
   }
@@ -145,15 +141,14 @@ class _ProductDomainManagerState extends State<ProductDomainManager> {
     });
 
     try {
-      String externalUrl = "";
-      Uint8List? rawBytes;
+      List<String> externalUrls = [];
+      List<Uint8List> fileBytesList = [];
 
-      if (_mediaItems.isNotEmpty) {
-        final selectedMedia = _mediaItems.first;
-        if (selectedMedia.hasBytes) {
-          rawBytes = selectedMedia.bytes;
-        } else if (selectedMedia.url != null && selectedMedia.url!.isNotEmpty) {
-          externalUrl = selectedMedia.url!;
+      for (var media in _mediaItems) {
+        if (media.hasBytes && media.bytes != null) {
+          fileBytesList.add(media.bytes!);
+        } else if (media.url != null && media.url!.trim().isNotEmpty) {
+          externalUrls.add(media.url!.trim());
         }
       }
 
@@ -163,7 +158,7 @@ class _ProductDomainManagerState extends State<ProductDomainManager> {
         "description": _description.text.trim().isEmpty ? "High-quality decor item." : _description.text.trim(),
         "material": _materialController.text.trim().isEmpty ? "Premium Grade Material" : _materialController.text.trim(),
         "print_type": _printTypeController.text.trim().isEmpty ? "High Definition Digital Print / Finish" : _printTypeController.text.trim(),
-        "image_url": externalUrl,
+        "external_urls": jsonEncode(externalUrls),
       };
 
       if (_editingProduct != null) {
@@ -173,19 +168,26 @@ class _ProductDomainManagerState extends State<ProductDomainManager> {
       final response = _editingProduct == null
           ? await OperationsApi.addProduct(
         fields: fields,
-        imageBytes: rawBytes,
+        imageBytes: fileBytesList.isNotEmpty ? fileBytesList.first : null,
         imageFileName: _mediaItems.isNotEmpty ? _mediaItems.first.fileName : null,
       )
           : await OperationsApi.updateProduct(
         fields: fields,
-        imageBytes: rawBytes,
+        imageBytes: fileBytesList.isNotEmpty ? fileBytesList.first : null,
         imageFileName: _mediaItems.isNotEmpty ? _mediaItems.first.fileName : null,
       );
 
       if (!mounted) return;
 
       if (response['status'] == 'success') {
-        final String finalImageUrl = (response['image_url'] ?? response['imageUrl'] ?? externalUrl).toString().trim();
+        List<String> finalUrls = [];
+        if (response['image_urls'] is List) {
+          finalUrls = List<String>.from(response['image_urls']);
+        } else if (response['image_url'] != null) {
+          finalUrls = [response['image_url'].toString()];
+        } else {
+          finalUrls = externalUrls;
+        }
 
         if (_editingProduct == null) {
           AppDataStore.products.add(
@@ -193,7 +195,7 @@ class _ProductDomainManagerState extends State<ProductDomainManager> {
               id: response['id']?.toString() ?? '',
               title: fields["title"]!,
               category: fields["category"]!,
-              imageUrls: finalImageUrl.isNotEmpty ? [finalImageUrl] : [],
+              imageUrls: finalUrls,
               description: fields["description"]!,
               material: fields["material"],
               printType: fields["print_type"],
@@ -206,9 +208,7 @@ class _ProductDomainManagerState extends State<ProductDomainManager> {
               id: _editingProduct!.id,
               title: fields["title"]!,
               category: fields["category"]!,
-              imageUrls: finalImageUrl.isNotEmpty
-                  ? [finalImageUrl]
-                  : _editingProduct!.imageUrls,
+              imageUrls: finalUrls,
               description: fields["description"]!,
               material: fields["material"],
               printType: fields["print_type"],
@@ -216,9 +216,7 @@ class _ProductDomainManagerState extends State<ProductDomainManager> {
           }
         }
 
-        // Permanently persist new category into the dropdown list in UI state
         _loadCategoriesFromDatabase();
-
         _resetForm();
         widget.onDataChanged();
         ScaffoldMessenger.of(context).showSnackBar(

@@ -526,26 +526,13 @@ class _AdminAuthState extends State<AdminAuth> {
                       crossAxisAlignment: CrossAxisAlignment.center,
                       children: [
                         // Responsive Logo Box
-                        Container(
-                          height: logoSize,
-                          width: logoSize * 1.15,
-                          padding: const EdgeInsets.all(8.0),
-                          decoration: BoxDecoration(
-                            color: Colors.white,
-                            borderRadius: BorderRadius.circular(15),
-                            boxShadow: [
-                              BoxShadow(
-                                color: Colors.black.withOpacity(0.15),
-                                blurRadius: 10,
-                                offset: const Offset(0, 4),
-                              ),
-                            ],
-                          ),
+                        SizedBox(
+                          height: 80, width: 120,
                           child: ClipRRect(
                             borderRadius: BorderRadius.circular(10),
                             child: Image.asset(
                               "assets/photos/bindu.png",
-                              fit: BoxFit.contain,
+                              fit: BoxFit.contain, color: Colors.white,
                               errorBuilder: (context, error, stackTrace) => const Icon(
                                 Icons.business,
                                 color: LuxuryTheme.primaryDark,
@@ -565,10 +552,7 @@ class _AdminAuthState extends State<AdminAuth> {
                               fontWeight: FontWeight.bold,
                               color: Colors.white.withOpacity(
                                 _authMode == AuthMode.signIn ? 1.0 : 0.6,
-                              ),
-                              fontSize: 13,
-                              letterSpacing: 1.2,
-                            ),
+                              ), fontSize: 13, letterSpacing: 1.2),
                             child: const Text("SIGN IN"),
                           ),
                         ),

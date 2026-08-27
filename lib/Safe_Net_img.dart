@@ -7,7 +7,7 @@ class SafeNetworkImage extends StatefulWidget {
   final BoxFit fit;
 
   // Active LAN IP / Host of your backend server
-  static const String baseUrl = 'http://192.168.1.4/bindu_decor/';
+  static const String baseUrl = 'http://192.168.1.6/bindu_decor/';
 
   const SafeNetworkImage({
     super.key,
