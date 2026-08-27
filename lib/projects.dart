@@ -27,6 +27,7 @@ class _ProjectDomainManagerState extends State<ProjectDomainManager> {
   final _urlController = TextEditingController();
 
   bool _isLoading = false;
+  ProjectItem? _editingProject; // ✅ Editing project reference
 
   String _selectedPropertyType = 'Apartment';
   final List<String> _propertyTypeOptions = ['Apartment', 'Villa', 'Bungalow', 'Penthouse', 'Duplex', 'Row House', 'Commercial'];
@@ -46,7 +47,47 @@ class _ProjectDomainManagerState extends State<ProjectDomainManager> {
 
   final List<MediaItem> _mediaItems = [];
 
-  Future<void> _addProject() async {
+  // ✅ Reset form for new project or cancel edit
+  void _resetForm() {
+    _title.clear();
+    _subTitle.clear();
+    _location.clear();
+    _pricing.clear();
+    _bhk.clear();
+    _size.clear();
+    _description.clear();
+    _urlController.clear();
+    _mediaItems.clear();
+    setState(() {
+      _editingProject = null;
+      _selectedPropertyType = 'Apartment';
+      _selectedScope = 'Full Interior';
+    });
+  }
+
+  // ✅ Edit project - load data into form
+  void _editProject(ProjectItem item) {
+    setState(() {
+      _editingProject = item;
+      _title.text = item.title;
+      _subTitle.text = item.subTitle ?? '';
+      _location.text = item.location ?? '';
+      _pricing.text = item.pricing ?? '';
+      _bhk.text = item.bhk ?? '';
+      _size.text = item.size ?? '';
+      _description.text = item.description ?? '';
+      _selectedPropertyType = item.propertyType ?? 'Apartment';
+      _selectedScope = item.scope ?? 'Full Interior';
+
+      // Load existing image URLs as MediaItems
+      _mediaItems.clear();
+      for (var url in item.imageUrls) {
+        _mediaItems.add(MediaItem(url: url));
+      }
+    });
+  }
+
+  Future<void> _saveProject() async {
     if (_title.text.trim().isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text("Project Title is required!")),
@@ -61,15 +102,18 @@ class _ProjectDomainManagerState extends State<ProjectDomainManager> {
     try {
       List<String> externalUrls = [];
       List<Uint8List> fileBytesList = [];
+      List<String> fileNamesList = [];
 
       for (var media in _mediaItems) {
         if (media.hasBytes && media.bytes != null) {
           fileBytesList.add(media.bytes!);
+          fileNamesList.add(media.fileName ?? 'project_image.jpg');
         } else if (media.url != null && media.url!.trim().isNotEmpty) {
           externalUrls.add(media.url!.trim());
         }
       }
 
+      // If no images, add a default
       if (externalUrls.isEmpty && fileBytesList.isEmpty) {
         externalUrls.add("https://images.unsplash.com/photo-1618221195710-dd6b41faaea6?w=800");
       }
@@ -84,13 +128,24 @@ class _ProjectDomainManagerState extends State<ProjectDomainManager> {
         "property_type": _selectedPropertyType,
         "size": _size.text.trim().isEmpty ? "2000 sq ft" : _size.text.trim(),
         "description": _description.text.trim().isEmpty ? "No description provided." : _description.text.trim(),
-        "external_urls": jsonEncode(externalUrls),
+        "image_urls": jsonEncode(externalUrls),
       };
 
-      final response = await OperationsApi.addProject(
+      // ✅ If editing, add ID to fields
+      if (_editingProject != null) {
+        fields["id"] = _editingProject!.id.toString();
+      }
+
+      final response = _editingProject == null
+          ? await OperationsApi.addProject(
         fields: fields,
-        imageBytes: fileBytesList.isNotEmpty ? fileBytesList.first : null,
-        imageFileName: _mediaItems.isNotEmpty ? _mediaItems.first.fileName : null,
+        imageBytesList: fileBytesList,
+        fileNamesList: fileNamesList,
+      )
+          : await OperationsApi.updateProject(
+        fields: fields,
+        imageBytesList: fileBytesList,
+        fileNamesList: fileNamesList,
       );
 
       if (!mounted) return;
@@ -105,42 +160,45 @@ class _ProjectDomainManagerState extends State<ProjectDomainManager> {
           finalUrls = externalUrls;
         }
 
-        AppDataStore.projects.add(
-          ProjectItem.fromMap({
-            "id": response['id']?.toString() ?? DateTime.now().millisecondsSinceEpoch.toString(),
-            "title": fields["title"],
-            "sub_title": fields["sub_title"],
-            "location": fields["location"],
-            "pricing": fields["pricing"],
-            "bhk": fields["bhk"],
-            "scope": fields["scope"],
-            "property_type": fields["property_type"],
-            "size": fields["size"],
-            "description": fields["description"],
-            "image_url": jsonEncode(finalUrls),
-            "image_urls": finalUrls,
-          }),
-        );
+        // ✅ Build updated project data
+        final projectData = response['data'] ?? {};
+        final project = ProjectItem.fromMap({
+          "id": response['id']?.toString() ?? DateTime.now().millisecondsSinceEpoch.toString(),
+          "title": fields["title"],
+          "sub_title": fields["sub_title"],
+          "location": fields["location"],
+          "pricing": fields["pricing"],
+          "bhk": fields["bhk"],
+          "scope": fields["scope"],
+          "property_type": fields["property_type"],
+          "size": fields["size"],
+          "description": fields["description"],
+          "image_urls": finalUrls,
+        });
 
-        _title.clear();
-        _subTitle.clear();
-        _location.clear();
-        _pricing.clear();
-        _bhk.clear();
-        _selectedPropertyType = 'Apartment';
-        _selectedScope = 'Full Interior';
-        _size.clear();
-        _description.clear();
-        _mediaItems.clear();
-        _urlController.clear();
+        if (_editingProject == null) {
+          // ✅ Add new project
+          AppDataStore.projects.add(project);
+        } else {
+          // ✅ Update existing project
+          final idx = AppDataStore.projects.indexWhere((p) => p.id == _editingProject!.id);
+          if (idx != -1) {
+            AppDataStore.projects[idx] = project;
+          }
+        }
 
+        _resetForm();
         widget.onDataChanged();
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text("New Project published successfully!")),
+          SnackBar(
+            content: Text(
+              _editingProject == null ? "New Project published successfully!" : "Project updated successfully!",
+            ),
+          ),
         );
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text("Failed to publish project: ${response['message']}")),
+          SnackBar(content: Text("Failed to save project: ${response['message']}")),
         );
       }
     } catch (e) {
@@ -232,7 +290,21 @@ class _ProjectDomainManagerState extends State<ProjectDomainManager> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text("Add New Interior Project", style: GoogleFonts.aleo(fontSize: 18, fontWeight: FontWeight.bold, color: AdminTheme.primaryDark)),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      _editingProject != null ? "Edit Interior Project" : "Add New Interior Project",
+                      style: GoogleFonts.aleo(fontSize: 18, fontWeight: FontWeight.bold, color: AdminTheme.primaryDark),
+                    ),
+                    if (_editingProject != null)
+                      TextButton.icon(
+                        onPressed: _resetForm,
+                        icon: const Icon(Icons.add, size: 16),
+                        label: const Text("Cancel Edit"),
+                      ),
+                  ],
+                ),
                 const SizedBox(height: 16),
                 _buildTextField(controller: _title, label: "Project Title *"),
                 const SizedBox(height: 12),
@@ -329,7 +401,7 @@ class _ProjectDomainManagerState extends State<ProjectDomainManager> {
                   width: double.infinity,
                   height: 48,
                   child: ElevatedButton(
-                    onPressed: _isLoading ? null : _addProject,
+                    onPressed: _isLoading ? null : _saveProject,
                     style: ElevatedButton.styleFrom(
                       backgroundColor: AdminTheme.primaryDark,
                       foregroundColor: Colors.white,
@@ -342,7 +414,10 @@ class _ProjectDomainManagerState extends State<ProjectDomainManager> {
                       height: 20,
                       child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
                     )
-                        : Text("PUBLISH PROJECT", style: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.bold, fontSize: 13, letterSpacing: 0.8)),
+                        : Text(
+                      _editingProject != null ? "UPDATE PROJECT" : "PUBLISH PROJECT",
+                      style: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.bold, fontSize: 13, letterSpacing: 0.8),
+                    ),
                   ),
                 )
               ],
@@ -402,12 +477,22 @@ class _ProjectDomainManagerState extends State<ProjectDomainManager> {
                         overflow: TextOverflow.ellipsis,
                       ),
                       subtitle: Text(
-                        "${item.propertyType} • ${item.location} • ${item.pricing}",
+                        "${item.propertyType} • ${item.location} • ${item.imageUrls.length} image(s)",
                         style: GoogleFonts.plusJakartaSans(fontSize: 12, color: Colors.grey.shade600),
                       ),
-                      trailing: IconButton(
-                        icon: const Icon(Icons.delete_outline_rounded, color: Colors.redAccent),
-                        onPressed: () => _deleteProject(item.id.toString(), idx),
+                      trailing: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          // ✅ Edit button added
+                          IconButton(
+                            icon: const Icon(Icons.edit_outlined, color: AdminTheme.primaryDark),
+                            onPressed: () => _editProject(item),
+                          ),
+                          IconButton(
+                            icon: const Icon(Icons.delete_outline_rounded, color: Colors.redAccent),
+                            onPressed: () => _deleteProject(item.id.toString(), idx),
+                          ),
+                        ],
                       ),
                     );
                   },

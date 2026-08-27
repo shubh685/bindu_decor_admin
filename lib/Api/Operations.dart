@@ -1,4 +1,3 @@
-// Operations.dart
 import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
@@ -15,7 +14,7 @@ class OperationsApi {
   static const String baseUrl = 'http://192.168.1.6/bindu_decor/';
 
   // ==========================================
-  // IMAGE URL RESOLUTION — now routed through image.php
+  // IMAGE URL RESOLUTION — routed through image.php
   // ==========================================
   static String resolveImageUrl(String? imagePath) {
     if (imagePath == null || imagePath.isEmpty) return '';
@@ -93,46 +92,6 @@ class OperationsApi {
   // Helper: check successful status codes (200 or 201)
   static bool _isSuccessStatus(int status) => status == 200 || status == 201;
 
-  // Update Product
-  static Future<Map<String, dynamic>> updateProduct({
-    required Map<String, String> fields,
-    Uint8List? imageBytes,
-    String? imageFileName,
-  }) async {
-    try {
-      final uri = Uri.parse("${baseUrl}products.php?action=update");
-      final request = http.MultipartRequest('POST', uri);
-
-      fields.forEach((key, value) {
-        request.fields[key] = value;
-      });
-
-      if (imageBytes != null && imageBytes.isNotEmpty) {
-        final fileName = imageFileName ?? 'product_image.jpg';
-        String subtype = 'jpeg';
-        if (fileName.toLowerCase().endsWith('.png')) subtype = 'png';
-        else if (fileName.toLowerCase().endsWith('.webp')) subtype = 'webp';
-        else if (fileName.toLowerCase().endsWith('.gif')) subtype = 'gif';
-
-        request.files.add(
-          http.MultipartFile.fromBytes(
-            'image_file',
-            imageBytes,
-            filename: fileName,
-            contentType: MediaType('image', subtype),
-          ),
-        );
-      }
-
-      final streamedResponse = await request.send();
-      final response = await http.Response.fromStream(streamedResponse);
-      return jsonDecode(response.body);
-    } catch (e) {
-      debugPrint("OperationsApi updateProduct error: $e");
-      return {'status': 'error', 'message': e.toString()};
-    }
-  }
-
   // ==========================================
   // PRODUCT OPERATIONS
   // ==========================================
@@ -163,31 +122,24 @@ class OperationsApi {
 
   static Future<Map<String, dynamic>> addProduct({
     required Map<String, String> fields,
+    List<Uint8List>? imageBytesList,
+    List<String>? fileNamesList,
     Uint8List? imageBytes,
     String? imageFileName,
   }) async {
     try {
-      final request = http.MultipartRequest(
-        'POST',
-        Uri.parse('${baseUrl}products.php?action=add'),
-      );
+      final uri = Uri.parse('${baseUrl}products.php?action=add');
+      final request = http.MultipartRequest('POST', uri);
 
+      // add normal fields (including image_urls which should be a JSON string for multiple URLs)
       request.fields.addAll(fields);
 
-      if (imageBytes != null && imageBytes.isNotEmpty) {
-        final fileName = imageFileName ?? 'product.jpg';
-        String subtype = 'jpeg';
-        if (fileName.toLowerCase().endsWith('.png')) subtype = 'png';
-        else if (fileName.toLowerCase().endsWith('.webp')) subtype = 'webp';
-        else if (fileName.toLowerCase().endsWith('.gif')) subtype = 'gif';
-        final multipartFile = http.MultipartFile.fromBytes(
-          'imageFile',
-          imageBytes,
-          filename: fileName,
-          contentType: MediaType('image', subtype),
-        );
-        request.files.add(multipartFile);
-      }
+      // normalize bytesList & names
+      final List<Uint8List> bytesList = imageBytesList ??
+          (imageBytes != null ? [imageBytes] : []);
+      final List<String>? namesList = fileNamesList ?? (imageFileName != null ? [imageFileName] : null);
+
+      _attachFilesToRequest(request, 'images', bytesList, namesList);
 
       final streamed = await request.send();
       final response = await http.Response.fromStream(streamed);
@@ -201,6 +153,41 @@ class OperationsApi {
       }
     } catch (e) {
       return {'status': 'error', 'message': 'Connection error: $e'};
+    }
+  }
+
+  static Future<Map<String, dynamic>> updateProduct({
+    required Map<String, String> fields,
+    List<Uint8List>? imageBytesList,
+    List<String>? fileNamesList,
+    Uint8List? imageBytes,
+    String? imageFileName,
+  }) async {
+    try {
+      final uri = Uri.parse("${baseUrl}products.php?action=update");
+      final request = http.MultipartRequest('POST', uri);
+
+      request.fields.addAll(fields);
+
+      final List<Uint8List> bytesList = imageBytesList ??
+          (imageBytes != null ? [imageBytes] : []);
+      final List<String>? namesList = fileNamesList ?? (imageFileName != null ? [imageFileName] : null);
+
+      _attachFilesToRequest(request, 'images', bytesList, namesList);
+
+      final streamedResponse = await request.send();
+      final response = await http.Response.fromStream(streamedResponse);
+
+      print('Update Product HTTP(${response.statusCode}): ${response.body}');
+
+      if (_isSuccessStatus(response.statusCode)) {
+        return json.decode(response.body) as Map<String, dynamic>;
+      } else {
+        return {'status': 'error', 'message': 'Server error: ${response.statusCode}', 'raw': response.body};
+      }
+    } catch (e) {
+      debugPrint("OperationsApi updateProduct error: $e");
+      return {'status': 'error', 'message': e.toString()};
     }
   }
 
@@ -255,31 +242,24 @@ class OperationsApi {
 
   static Future<Map<String, dynamic>> addProject({
     required Map<String, String> fields,
+    List<Uint8List>? imageBytesList,
+    List<String>? fileNamesList,
     Uint8List? imageBytes,
     String? imageFileName,
   }) async {
     try {
-      final request = http.MultipartRequest(
-        'POST',
-        Uri.parse('${baseUrl}projects.php?action=add'),
-      );
+      final uri = Uri.parse('${baseUrl}projects.php?action=add');
+      final request = http.MultipartRequest('POST', uri);
 
+      // Add fields (including image_urls as JSON string if provided)
       request.fields.addAll(fields);
 
-      if (imageBytes != null && imageBytes.isNotEmpty) {
-        final fileName = imageFileName ?? 'project.jpg';
-        String subtype = 'jpeg';
-        if (fileName.toLowerCase().endsWith('.png')) subtype = 'png';
-        else if (fileName.toLowerCase().endsWith('.webp')) subtype = 'webp';
-        else if (fileName.toLowerCase().endsWith('.gif')) subtype = 'gif';
-        final multipartFile = http.MultipartFile.fromBytes(
-          'imageFile',
-          imageBytes,
-          filename: fileName,
-          contentType: MediaType('image', subtype),
-        );
-        request.files.add(multipartFile);
-      }
+      // Normalize bytes/names
+      final List<Uint8List> bytesList = imageBytesList ??
+          (imageBytes != null ? [imageBytes] : []);
+      final List<String>? namesList = fileNamesList ?? (imageFileName != null ? [imageFileName] : null);
+
+      _attachFilesToRequest(request, 'imageFile', bytesList, namesList);
 
       final streamed = await request.send();
       final response = await http.Response.fromStream(streamed);
@@ -293,6 +273,41 @@ class OperationsApi {
       }
     } catch (e) {
       return {'status': 'error', 'message': 'Connection error: $e'};
+    }
+  }
+
+  static Future<Map<String, dynamic>> updateProject({
+    required Map<String, String> fields,
+    List<Uint8List>? imageBytesList,
+    List<String>? fileNamesList,
+    Uint8List? imageBytes,
+    String? imageFileName,
+  }) async {
+    try {
+      final uri = Uri.parse('${baseUrl}projects.php?action=update');
+      final request = http.MultipartRequest('POST', uri);
+
+      request.fields.addAll(fields);
+
+      final List<Uint8List> bytesList = imageBytesList ??
+          (imageBytes != null ? [imageBytes] : []);
+      final List<String>? namesList = fileNamesList ?? (imageFileName != null ? [imageFileName] : null);
+
+      _attachFilesToRequest(request, 'imageFile', bytesList, namesList);
+
+      final streamed = await request.send();
+      final response = await http.Response.fromStream(streamed);
+
+      print('Update Project HTTP(${response.statusCode}): ${response.body}');
+
+      if (_isSuccessStatus(response.statusCode)) {
+        return json.decode(response.body) as Map<String, dynamic>;
+      } else {
+        return {'status': 'error', 'message': 'Server error: ${response.statusCode}', 'raw': response.body};
+      }
+    } catch (e) {
+      debugPrint("OperationsApi updateProject error: $e");
+      return {'status': 'error', 'message': e.toString()};
     }
   }
 
@@ -408,6 +423,40 @@ class OperationsApi {
     } catch (e) {
       print('Error deleting client: $e');
       return false;
+    }
+  }
+
+  static void _attachFilesToRequest(
+      http.MultipartRequest request,
+      String fieldBase, // 'images' or 'imageFile' or 'imageFile' etc.
+      List<Uint8List> bytesList,
+      List<String>? namesList,
+      ) {
+    if (bytesList.isEmpty) return;
+
+    final bool multiple = bytesList.length > 1;
+    final String fieldNameForMultiple = '$fieldBase[]';
+    for (int i = 0; i < bytesList.length; i++) {
+      final filename = (namesList != null && i < namesList.length && namesList[i].isNotEmpty)
+          ? namesList[i]
+          : '${fieldBase}_$i.jpg';
+      String subtype = 'jpeg';
+      final fnameLower = filename.toLowerCase();
+      if (fnameLower.endsWith('.png')) subtype = 'png';
+      else if (fnameLower.endsWith('.webp')) subtype = 'webp';
+      else if (fnameLower.endsWith('.gif')) subtype = 'gif';
+      else if (fnameLower.endsWith('.bmp')) subtype = 'bmp';
+
+      final fieldName = multiple ? fieldNameForMultiple : fieldBase; // if single file, use 'images' etc.
+
+      request.files.add(
+        http.MultipartFile.fromBytes(
+          fieldName,
+          bytesList[i],
+          filename: filename,
+          contentType: MediaType('image', subtype),
+        ),
+      );
     }
   }
 }

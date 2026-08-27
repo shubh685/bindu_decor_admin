@@ -151,14 +151,16 @@ class _BlogsState extends State<Blogs> with AutomaticKeepAliveClientMixin {
 
           request.files.add(
             http.MultipartFile.fromBytes(
-              'images[]',
+              'photos[]',
               media.bytes!,
               filename: fileName,
             ),
           );
           uploadIndex++;
         } else if (media.url != null && media.url!.trim().isNotEmpty) {
-          request.fields['external_urls[]'] = media.url!.trim();
+          // Send web URLs as photos[] field entries
+          request.fields['photos[]'] = media.url!.trim();
+          uploadIndex++;
         }
       }
 
@@ -775,7 +777,7 @@ class _BlogsState extends State<Blogs> with AutomaticKeepAliveClientMixin {
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  "By ${blog.authorName} • ${blog.photos.length} image(s)",
+                  "By ${blog.authorName.split(RegExp(r'https?://')).first.trim()} • ${blog.photos.length} image(s)",
                   style: GoogleFonts.plusJakartaSans(fontSize: 12, color: Colors.grey.shade600),
                 ),
               ],

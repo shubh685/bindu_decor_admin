@@ -143,10 +143,12 @@ class _ProductDomainManagerState extends State<ProductDomainManager> {
     try {
       List<String> externalUrls = [];
       List<Uint8List> fileBytesList = [];
+      List<String> fileNamesList = [];
 
       for (var media in _mediaItems) {
         if (media.hasBytes && media.bytes != null) {
           fileBytesList.add(media.bytes!);
+          fileNamesList.add(media.fileName ?? 'product_image.jpg');
         } else if (media.url != null && media.url!.trim().isNotEmpty) {
           externalUrls.add(media.url!.trim());
         }
@@ -158,7 +160,7 @@ class _ProductDomainManagerState extends State<ProductDomainManager> {
         "description": _description.text.trim().isEmpty ? "High-quality decor item." : _description.text.trim(),
         "material": _materialController.text.trim().isEmpty ? "Premium Grade Material" : _materialController.text.trim(),
         "print_type": _printTypeController.text.trim().isEmpty ? "High Definition Digital Print / Finish" : _printTypeController.text.trim(),
-        "external_urls": jsonEncode(externalUrls),
+        "image_urls": jsonEncode(externalUrls),
       };
 
       if (_editingProduct != null) {
@@ -168,13 +170,13 @@ class _ProductDomainManagerState extends State<ProductDomainManager> {
       final response = _editingProduct == null
           ? await OperationsApi.addProduct(
         fields: fields,
-        imageBytes: fileBytesList.isNotEmpty ? fileBytesList.first : null,
-        imageFileName: _mediaItems.isNotEmpty ? _mediaItems.first.fileName : null,
+        imageBytesList: fileBytesList,
+        fileNamesList: fileNamesList,
       )
           : await OperationsApi.updateProduct(
         fields: fields,
-        imageBytes: fileBytesList.isNotEmpty ? fileBytesList.first : null,
-        imageFileName: _mediaItems.isNotEmpty ? _mediaItems.first.fileName : null,
+        imageBytesList: fileBytesList,
+        fileNamesList: fileNamesList,
       );
 
       if (!mounted) return;
@@ -221,7 +223,9 @@ class _ProductDomainManagerState extends State<ProductDomainManager> {
         widget.onDataChanged();
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(_editingProduct == null ? "New product published successfully!" : "Product updated successfully!"),
+            content: Text(
+              _editingProduct == null ? "Product published!" : "Product updated!",
+            ),
           ),
         );
       } else {
@@ -258,8 +262,8 @@ class _ProductDomainManagerState extends State<ProductDomainManager> {
               if (success && mounted) {
                 setState(() {
                   AppDataStore.products.removeAt(index);
-                  _loadCategoriesFromDatabase();
                 });
+                _loadCategoriesFromDatabase();
                 widget.onDataChanged();
                 Navigator.pop(ctx);
                 ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Product deleted!")));
@@ -323,24 +327,25 @@ class _ProductDomainManagerState extends State<ProductDomainManager> {
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
                     Text(
-                      _editingProduct != null ? "Edit Product Entry" : "Add New Product Catalog Entry",
+                      _editingProduct != null ? "Edit Decor Product" : "Add New Decor Product",
                       style: GoogleFonts.aleo(fontSize: 18, fontWeight: FontWeight.bold, color: AdminTheme.primaryDark),
                     ),
                     if (_editingProduct != null)
                       TextButton.icon(
                         onPressed: _resetForm,
                         icon: const Icon(Icons.add, size: 16),
-                        label: const Text("New Entry"),
+                        label: const Text("Cancel Edit"),
                       ),
                   ],
                 ),
                 const SizedBox(height: 16),
                 _buildTextField(controller: _title, label: "Product Title *"),
                 const SizedBox(height: 12),
+
                 Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text("Category Selection", style: GoogleFonts.plusJakartaSans(fontSize: 12, fontWeight: FontWeight.w600, color: AdminTheme.primaryDark)),
+                    Text("Select Category", style: GoogleFonts.plusJakartaSans(fontSize: 12, fontWeight: FontWeight.w600, color: AdminTheme.primaryDark)),
                     const SizedBox(height: 6),
                     DropdownButtonFormField<String>(
                       value: _categories.contains(_selectedCategory) ? _selectedCategory : _categories.first,
@@ -355,46 +360,41 @@ class _ProductDomainManagerState extends State<ProductDomainManager> {
                         focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: AdminTheme.primaryAccent, width: 1.5)),
                       ),
                       items: _categories.map((c) => DropdownMenuItem(value: c, child: Text(c))).toList(),
-                      onChanged: (val) => setState(() => _selectedCategory = val!),
+                      onChanged: (val) {
+                        if (val != null) {
+                          setState(() {
+                            _selectedCategory = val;
+                          });
+                        }
+                      },
                     ),
-                    if (_selectedCategory == 'Create New Category') ...[
-                      const SizedBox(height: 10),
-                      Row(
-                        children: [
-                          Expanded(
-                            child: TextField(
-                              controller: _newCategoryController,
-                              style: GoogleFonts.plusJakartaSans(fontSize: 13),
-                              decoration: InputDecoration(
-                                hintText: "Enter new category name",
-                                isDense: true,
-                                filled: true,
-                                fillColor: const Color(0xFFFAF9F6),
-                                contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                                border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide(color: Colors.grey.shade300)),
-                                enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide(color: Colors.grey.shade300)),
-                                focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: AdminTheme.primaryAccent, width: 1.5)),
-                              ),
-                            ),
-                          ),
-                          const SizedBox(width: 8),
-                          ElevatedButton(
-                            onPressed: _addNewCategory,
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: AdminTheme.primaryAccent,
-                              foregroundColor: Colors.white,
-                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-                            ),
-                            child: const Text("ADD"),
-                          ),
-                        ],
-                      ),
-                    ],
                   ],
                 ),
-                const SizedBox(height: 12),
-                _buildTextField(controller: _description, label: "Description", maxLines: 2),
+
+                if (_selectedCategory == 'Create New Category') ...[
+                  const SizedBox(height: 12),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: _buildTextField(controller: _newCategoryController, label: "New Category Name"),
+                      ),
+                      const SizedBox(width: 8),
+                      Padding(
+                        padding: const EdgeInsets.only(top: 18),
+                        child: ElevatedButton(
+                          onPressed: _addNewCategory,
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: AdminTheme.primaryAccent,
+                            foregroundColor: AdminTheme.primaryDark,
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                          ),
+                          child: const Text("ADD"),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+
                 const SizedBox(height: 12),
                 Row(
                   children: [
@@ -403,6 +403,8 @@ class _ProductDomainManagerState extends State<ProductDomainManager> {
                     Expanded(child: _buildTextField(controller: _printTypeController, label: "Print / Finish Type")),
                   ],
                 ),
+                const SizedBox(height: 12),
+                _buildTextField(controller: _description, label: "Description", maxLines: 2),
                 const SizedBox(height: 16),
                 MediaPickerWidget(
                   mediaList: _mediaItems,
@@ -494,8 +496,16 @@ class _ProductDomainManagerState extends State<ProductDomainManager> {
                           child: buildUniversalImage(MediaItem(url: displayUrl)),
                         ),
                       ),
-                      title: Text(item.title, style: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.bold, fontSize: 14), maxLines: 1, overflow: TextOverflow.ellipsis),
-                      subtitle: Text("${item.category} • ${item.material}", style: GoogleFonts.plusJakartaSans(fontSize: 12, color: Colors.grey.shade600)),
+                      title: Text(
+                        item.title,
+                        style: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.bold, fontSize: 14),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      subtitle: Text(
+                        "${item.category} • ${item.imageUrls.length} image(s)",
+                        style: GoogleFonts.plusJakartaSans(fontSize: 12, color: Colors.grey.shade600),
+                      ),
                       trailing: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [

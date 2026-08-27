@@ -13,7 +13,7 @@ import 'dart:convert';
 
 import 'AdminDashboard.dart';
 
-const String _kBaseUrl = 'http://192.168.1.4/bindu_decor';
+const String _kBaseUrl = 'http://192.168.1.6/bindu_decor';
 
 String _resolveImageUrl(String raw) {
   var value = raw.trim();
