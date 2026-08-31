@@ -167,6 +167,13 @@ class _ProductDomainManagerState extends State<ProductDomainManager> {
         fields["id"] = _editingProduct!.id;
       }
 
+      for (int i = 0; i < externalUrls.length; i++) {
+        fields["image_urls[$i]"] = externalUrls[i];
+      }
+      if (externalUrls.isEmpty && fileBytesList.isEmpty) {
+        fields["image_urls[0]"] = "https://images.unsplash.com/photo-1618221195710-dd6b41faaea6?w=800";
+      }
+
       final response = _editingProduct == null
           ? await OperationsApi.addProduct(
         fields: fields,

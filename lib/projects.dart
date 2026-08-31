@@ -27,7 +27,7 @@ class _ProjectDomainManagerState extends State<ProjectDomainManager> {
   final _urlController = TextEditingController();
 
   bool _isLoading = false;
-  ProjectItem? _editingProject; // ✅ Editing project reference
+  ProjectItem? _editingProject;
 
   String _selectedPropertyType = 'Apartment';
   final List<String> _propertyTypeOptions = ['Apartment', 'Villa', 'Bungalow', 'Penthouse', 'Duplex', 'Row House', 'Commercial'];
@@ -47,7 +47,6 @@ class _ProjectDomainManagerState extends State<ProjectDomainManager> {
 
   final List<MediaItem> _mediaItems = [];
 
-  // ✅ Reset form for new project or cancel edit
   void _resetForm() {
     _title.clear();
     _subTitle.clear();
@@ -65,21 +64,19 @@ class _ProjectDomainManagerState extends State<ProjectDomainManager> {
     });
   }
 
-  // ✅ Edit project - load data into form
   void _editProject(ProjectItem item) {
     setState(() {
       _editingProject = item;
       _title.text = item.title;
-      _subTitle.text = item.subTitle ?? '';
-      _location.text = item.location ?? '';
-      _pricing.text = item.pricing ?? '';
-      _bhk.text = item.bhk ?? '';
-      _size.text = item.size ?? '';
-      _description.text = item.description ?? '';
-      _selectedPropertyType = item.propertyType ?? 'Apartment';
-      _selectedScope = item.scope ?? 'Full Interior';
+      _subTitle.text = item.subTitle;
+      _location.text = item.location;
+      _pricing.text = item.pricing;
+      _bhk.text = item.bhk;
+      _size.text = item.size;
+      _description.text = item.description;
+      _selectedPropertyType = item.propertyType.isEmpty ? 'Apartment' : item.propertyType;
+      _selectedScope = item.scope.isEmpty ? 'Full Interior' : item.scope;
 
-      // Load existing image URLs as MediaItems
       _mediaItems.clear();
       for (var url in item.imageUrls) {
         _mediaItems.add(MediaItem(url: url));
@@ -113,7 +110,6 @@ class _ProjectDomainManagerState extends State<ProjectDomainManager> {
         }
       }
 
-      // If no images, add a default
       if (externalUrls.isEmpty && fileBytesList.isEmpty) {
         externalUrls.add("https://images.unsplash.com/photo-1618221195710-dd6b41faaea6?w=800");
       }
@@ -131,9 +127,12 @@ class _ProjectDomainManagerState extends State<ProjectDomainManager> {
         "image_urls": jsonEncode(externalUrls),
       };
 
-      // ✅ If editing, add ID to fields
       if (_editingProject != null) {
-        fields["id"] = _editingProject!.id.toString();
+        fields["id"] = _editingProject!.id;
+      }
+
+      for (int i = 0; i < externalUrls.length; i++) {
+        fields["image_urls[$i]"] = externalUrls[i];
       }
 
       final response = _editingProject == null
@@ -160,8 +159,6 @@ class _ProjectDomainManagerState extends State<ProjectDomainManager> {
           finalUrls = externalUrls;
         }
 
-        // ✅ Build updated project data
-        final projectData = response['data'] ?? {};
         final project = ProjectItem.fromMap({
           "id": response['id']?.toString() ?? DateTime.now().millisecondsSinceEpoch.toString(),
           "title": fields["title"],
@@ -177,10 +174,8 @@ class _ProjectDomainManagerState extends State<ProjectDomainManager> {
         });
 
         if (_editingProject == null) {
-          // ✅ Add new project
           AppDataStore.projects.add(project);
         } else {
-          // ✅ Update existing project
           final idx = AppDataStore.projects.indexWhere((p) => p.id == _editingProject!.id);
           if (idx != -1) {
             AppDataStore.projects[idx] = project;
@@ -483,14 +478,13 @@ class _ProjectDomainManagerState extends State<ProjectDomainManager> {
                       trailing: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          // ✅ Edit button added
                           IconButton(
                             icon: const Icon(Icons.edit_outlined, color: AdminTheme.primaryDark),
                             onPressed: () => _editProject(item),
                           ),
                           IconButton(
                             icon: const Icon(Icons.delete_outline_rounded, color: Colors.redAccent),
-                            onPressed: () => _deleteProject(item.id.toString(), idx),
+                            onPressed: () => _deleteProject(item.id, idx),
                           ),
                         ],
                       ),

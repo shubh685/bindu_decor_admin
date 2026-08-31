@@ -94,6 +94,8 @@ String normalizeToAbsoluteImageUrl(String rawOrPartial) {
   return '';
 }
 
+// In AdminDashboard.dart, update the buildUniversalImage function
+
 Widget buildUniversalImage(
     MediaItem media, {
       BoxFit fit = BoxFit.cover,
@@ -136,32 +138,29 @@ Widget buildUniversalImage(
 
   // 3) Data URI
   if (raw.startsWith('data:image/')) {
-    return Image.memory(
-      base64Decode(raw.split(',').last),
-      fit: fit,
-      width: width,
-      height: height,
-      gaplessPlayback: true,
-      errorBuilder: (c, e, s) {
-        return _imageFallback();
-      },
-    );
+    try {
+      return Image.memory(
+        base64Decode(raw.split(',').last),
+        fit: fit,
+        width: width,
+        height: height,
+        gaplessPlayback: true,
+        errorBuilder: (c, e, s) {
+          return _imageFallback();
+        },
+      );
+    } catch (_) {
+      return _imageFallback();
+    }
   }
 
-  // 4) Build/normalize URL
-  final imageUrl = normalizeToAbsoluteImageUrl(raw);
-
-  debugPrint('📸 Image loader raw="$raw" resolved="$imageUrl"');
-
-  if (imageUrl.isEmpty) {
-    return _imageFallback();
-  }
-
-  // 🔥 USE SafeNetworkImage INSTEAD of Image.network
+  // 4) Direct URL - use SafeNetworkImage
+  debugPrint('📸 Loading image: $raw');
   return SafeNetworkImage(
-    url: imageUrl,
+    url: raw,
     width: width,
     height: height,
+    fit: fit,
   );
 }
 
@@ -238,7 +237,7 @@ class _AdminDashboardState extends State<AdminDashboard> with SingleTickerProvid
 
   Future<void> _loadBlogs() async {
     try {
-      final response = await http.get(Uri.parse("http://192.168.1.6/bindu_decor/blogs.php"));
+      final response = await http.get(Uri.parse("http://192.168.1.48/bindu_decor/blogs.php"));
       if (response.statusCode == 200) {
         final resData = jsonDecode(response.body);
         if (resData['status'] == 'success' && resData['data'] != null) {
@@ -837,6 +836,8 @@ void _showAccountPopup(BuildContext context) {
 // ==========================================
 // OVERVIEW DOMAIN MANAGER (SUMMARY & COUNTS)
 // ==========================================
+
+
 class OverviewDomainManager extends StatelessWidget {
   final Function(int) onNavigateToTab;
 

@@ -1,41 +1,20 @@
-// Helper_class.dart
-
-// ==========================================
-// IMAGE URL RESOLUTION — routed through image.php
-// ==========================================
-// Same reasoning as OperationsApi.resolveImageUrl(): direct static files
-// under /uploads/ were failing with a connection-level error even though
-// the JSON APIs on the same host always succeed. Routing every image
-// through image.php makes image loads behave exactly like the working
-// JSON endpoints.
-
 import 'dart:convert';
-
 import 'AdminDashboard.dart';
 
-const String _kBaseUrl = 'http://192.168.1.6/bindu_decor';
+const String _kBaseUrl = 'http://192.168.1.48/bindu_decor';
 
 String _resolveImageUrl(String raw) {
   var value = raw.trim();
   if (value.isEmpty) return '';
 
-  // Asset images - return as is
   if (value.startsWith('assets/')) return value;
-
-  // Data URIs - return as is
   if (value.startsWith('data:image/')) return value;
 
-  // Already an image.php URL - return as is
-  if (value.contains('image.php?path=')) return value;
-
   String cleanPath = value;
-
-  // If it's a full URL, extract just the path portion
   final uri = Uri.tryParse(value);
   if (uri != null && (uri.scheme == 'http' || uri.scheme == 'https')) {
     cleanPath = uri.path;
   } else if (value.startsWith('//')) {
-    // protocol-relative URL
     final parsed = Uri.tryParse('https:$value');
     cleanPath = parsed?.path ?? value;
   }
@@ -44,10 +23,9 @@ String _resolveImageUrl(String raw) {
   if (cleanPath.isEmpty) return '';
 
   final baseUrl = _getBaseUrl();
-  return '$baseUrl/image.php?path=${Uri.encodeComponent(cleanPath)}';
+  return '$baseUrl/$cleanPath';
 }
 
-// Normalizes a raw path down to "uploads/filename.ext"
 String _cleanPath(String path) {
   String clean = path.replaceAll('\\', '/');
 
@@ -55,17 +33,14 @@ String _cleanPath(String path) {
     clean = clean.substring(1);
   }
 
-  // Remove duplicate bindu_decor/
   if (clean.toLowerCase().startsWith('bindu_decor/')) {
     clean = clean.substring('bindu_decor/'.length);
   }
 
-  // Remove duplicate uploads/uploads/
   if (clean.toLowerCase().startsWith('uploads/uploads/')) {
     clean = clean.substring('uploads/'.length);
   }
 
-  // Ensure uploads/ prefix if path is not empty and doesn't already have it
   if (clean.isNotEmpty && !clean.toLowerCase().startsWith('uploads/')) {
     clean = 'uploads/$clean';
   }
@@ -73,7 +48,6 @@ String _cleanPath(String path) {
   return clean;
 }
 
-// Get base URL with fallback
 String _getBaseUrl() {
   try {
     final origin = Uri.base;
@@ -82,16 +56,10 @@ String _getBaseUrl() {
       final port = origin.hasPort ? ':${origin.port}' : '';
       return '$scheme://${origin.host}$port/bindu_decor';
     }
-  } catch (e) {
-    // Fallback to the configured URL
-  }
-  // Default fallback - change this to your actual server IP
+  } catch (e) {}
   return _kBaseUrl;
 }
 
-// ==========================================
-// PROJECT ITEM
-// ==========================================
 class ProjectItem {
   final String id;
   final String title;
@@ -124,31 +92,43 @@ class ProjectItem {
   });
 
   factory ProjectItem.fromMap(Map<String, dynamic> map) {
-    String rawImage = '';
-    if (map['image_url'] != null && map['image_url'].toString().isNotEmpty) {
-      rawImage = map['image_url'].toString().trim();
-    } else if (map['imageUrl'] != null && map['imageUrl'].toString().isNotEmpty) {
-      rawImage = map['imageUrl'].toString().trim();
-    }
+    List<String> images = [];
 
-    final rawImages = map['image_url'] ?? map['imageUrls'];
-    final List<String> images = <String>[];
+    if (map['image_urls'] != null) {
+      final raw = map['image_urls'];
 
-    if (rawImages is List) {
-      for (final value in rawImages) {
-        final text = value?.toString().trim() ?? '';
-        if (text.isNotEmpty) {
-          final resolved = _resolveImageUrl(text);
-          if (resolved.isNotEmpty) images.add(resolved);
+      if (raw is List) {
+        for (var item in raw) {
+          final url = item.toString().trim();
+          if (url.isNotEmpty) images.add(url);
+        }
+      } else if (raw is String) {
+        try {
+          final decoded = jsonDecode(raw);
+          if (decoded is List) {
+            for (var item in decoded) {
+              final url = item.toString().trim();
+              if (url.isNotEmpty) images.add(url);
+            }
+          } else {
+            final url = raw.trim();
+            if (url.isNotEmpty) images.add(url);
+          }
+        } catch (_) {
+          final url = raw.trim();
+          if (url.isNotEmpty) images.add(url);
         }
       }
     }
 
-    if (rawImage.isNotEmpty) {
-      final resolved = _resolveImageUrl(rawImage);
-      if (resolved.isNotEmpty && !images.contains(resolved)) {
-        images.insert(0, resolved);
-      }
+    if (images.isEmpty && map['image_url'] != null) {
+      final url = map['image_url'].toString().trim();
+      if (url.isNotEmpty) images.add(url);
+    }
+
+    if (images.isEmpty && map['imageUrl'] != null) {
+      final url = map['imageUrl'].toString().trim();
+      if (url.isNotEmpty) images.add(url);
     }
 
     return ProjectItem(
@@ -169,12 +149,8 @@ class ProjectItem {
   }
 
   String get primaryImageUrl => imageUrl ?? (imageUrls.isNotEmpty ? imageUrls.first : '');
-  List<String> get normalizedImageUrls => imageUrls.map(_resolveImageUrl).where((e) => e.isNotEmpty).toList();
 }
 
-// ==========================================
-// PRODUCT ITEM
-// ==========================================
 class DecorProductItem {
   final String id;
   final String title;
@@ -197,21 +173,51 @@ class DecorProductItem {
   });
 
   factory DecorProductItem.fromMap(Map<String, dynamic> map) {
-    String rawImage = '';
-    if (map['image_url'] != null && map['image_url'].toString().isNotEmpty) {
-      rawImage = map['image_url'].toString().trim();
-    } else if (map['imageUrl'] != null && map['imageUrl'].toString().isNotEmpty) {
-      rawImage = map['imageUrl'].toString().trim();
+    List<String> images = [];
+
+    if (map['image_urls'] != null) {
+      final raw = map['image_urls'];
+
+      if (raw is List) {
+        for (var item in raw) {
+          final url = item.toString().trim();
+          if (url.isNotEmpty) images.add(url);
+        }
+      } else if (raw is String) {
+        try {
+          final decoded = jsonDecode(raw);
+          if (decoded is List) {
+            for (var item in decoded) {
+              final url = item.toString().trim();
+              if (url.isNotEmpty) images.add(url);
+            }
+          } else {
+            final url = raw.trim();
+            if (url.isNotEmpty) images.add(url);
+          }
+        } catch (_) {
+          final url = raw.trim();
+          if (url.isNotEmpty) images.add(url);
+        }
+      }
     }
 
-    final resolved = rawImage.isEmpty ? '' : _resolveImageUrl(rawImage);
+    if (images.isEmpty && map['image_url'] != null) {
+      final url = map['image_url'].toString().trim();
+      if (url.isNotEmpty) images.add(url);
+    }
+
+    if (images.isEmpty && map['imageUrl'] != null) {
+      final url = map['imageUrl'].toString().trim();
+      if (url.isNotEmpty) images.add(url);
+    }
 
     return DecorProductItem(
       id: (map['id'] ?? '').toString(),
       title: (map['title'] ?? '').toString(),
       category: (map['category'] ?? 'HOME DECOR').toString(),
-      imageUrls: resolved.isEmpty ? const <String>[] : <String>[resolved],
-      imageUrl: resolved.isEmpty ? null : resolved,
+      imageUrls: images,
+      imageUrl: images.isNotEmpty ? images.first : null,
       description: (map['description'] ?? '').toString(),
       material: map['material']?.toString(),
       printType: (map['print_type'] ?? map['printType'])?.toString(),
@@ -221,9 +227,6 @@ class DecorProductItem {
   String get primaryImageUrl => imageUrl ?? (imageUrls.isNotEmpty ? imageUrls.first : '');
 }
 
-// ==========================================
-// CLIENT ITEM
-// ==========================================
 class ClientItems {
   final String id;
   final String? imgUrl;
@@ -257,9 +260,6 @@ class ClientItems {
 
   String get primaryImageUrl => imageUrlFull ?? imageUrl ?? imgUrl ?? '';
 }
-
-// ==========================================
-// BLOG MODEL
 
 class BlogItem {
   final String id;
@@ -301,7 +301,7 @@ class BlogItem {
           .map((img) {
         final str = img.toString().trim();
         if (str.startsWith('http://') || str.startsWith('https://')) {
-          return str; // Keep full server URLs returned by public_image_url()
+          return str;
         }
         return _resolveImageUrl(str);
       })

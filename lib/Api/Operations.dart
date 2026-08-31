@@ -11,7 +11,7 @@ class OperationsApi {
   // For local testing on same PC: use localhost
   // For Android emulator: use 10.0.2.2
   // For real device: use your PC's actual LAN IP
-  static const String baseUrl = 'http://192.168.1.6/bindu_decor/';
+  static const String baseUrl = 'http://192.168.1.48/bindu_decor/';
 
   // ==========================================
   // IMAGE URL RESOLUTION — routed through image.php
@@ -59,9 +59,7 @@ class OperationsApi {
     // Strip any duplicate bindu_decor/ or uploads/uploads/ prefixes
     List<String> prefixes = [
       'http://localhost/bindu_decor/',
-      'http://127.0.0.1/bindu_decor/',
-      'http://10.0.2.2/bindu_decor/',
-      'http://192.168.1.6/bindu_decor/',
+      'http://192.168.1.48/bindu_decor/',
       'bindu_decor/',
     ];
     for (String prefix in prefixes) {
@@ -95,30 +93,6 @@ class OperationsApi {
   // ==========================================
   // PRODUCT OPERATIONS
   // ==========================================
-
-  static Future<List<DecorProductItem>> fetchProducts() async {
-    try {
-      final response = await http.get(
-        Uri.parse('${baseUrl}products.php?action=fetch'),
-        headers: {'Accept': 'application/json'},
-      );
-
-      print('Fetch Products Status: ${response.statusCode}');
-      print('Fetch Products Response: ${response.body}');
-
-      if (_isSuccessStatus(response.statusCode)) {
-        final data = json.decode(response.body);
-        if (data['status'] == 'success' && data['data'] != null) {
-          final List<dynamic> products = data['data'];
-          return products.map((item) => DecorProductItem.fromMap(item)).toList();
-        }
-      }
-      return [];
-    } catch (e) {
-      print('Error fetching products: $e');
-      return [];
-    }
-  }
 
   static Future<Map<String, dynamic>> addProduct({
     required Map<String, String> fields,
@@ -215,30 +189,6 @@ class OperationsApi {
   // ==========================================
   // PROJECT OPERATIONS
   // ==========================================
-
-  static Future<List<ProjectItem>> fetchProjects() async {
-    try {
-      final response = await http.get(
-        Uri.parse('${baseUrl}projects.php?action=fetch'),
-        headers: {'Accept': 'application/json'},
-      );
-
-      print('Fetch Projects Status: ${response.statusCode}');
-      print('Fetch Projects Response: ${response.body}');
-
-      if (_isSuccessStatus(response.statusCode)) {
-        final data = json.decode(response.body);
-        if (data['status'] == 'success' && data['data'] != null) {
-          final List<dynamic> projects = data['data'];
-          return projects.map((item) => ProjectItem.fromMap(item)).toList();
-        }
-      }
-      return [];
-    } catch (e) {
-      print('Error fetching projects: $e');
-      return [];
-    }
-  }
 
   static Future<Map<String, dynamic>> addProject({
     required Map<String, String> fields,
@@ -458,5 +408,82 @@ class OperationsApi {
         ),
       );
     }
+  }
+
+  // In Operations.dart, update the fetch methods
+  static Future<List<DecorProductItem>> fetchProducts() async {
+    try {
+      final response = await http.get(
+        Uri.parse("$baseUrl/products.php"),
+      );
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        if (data['status'] == 'success' && data['data'] != null) {
+          final List list = data['data'];
+          return list.map((item) {
+            List<String> imageUrls = [];
+            if (item['image_urls'] is List) {
+              imageUrls = List<String>.from(item['image_urls']);
+            } else if (item['image_url'] is String) {
+              imageUrls = [item['image_url']];
+            }
+
+            return DecorProductItem(
+              id: item['id']?.toString() ?? '',
+              title: item['title'] ?? '',
+              category: item['category'] ?? 'HOME DECOR',
+              imageUrls: imageUrls,
+              description: item['description'] ?? '',
+              material: item['material'] ?? 'Premium Grade Material',
+              printType: item['print_type'] ?? 'High Definition Digital Print / Finish',
+            );
+          }).toList();
+        }
+      }
+    } catch (e) {
+      debugPrint('Error fetching products: $e');
+    }
+    return [];
+  }
+
+  static Future<List<ProjectItem>> fetchProjects() async {
+    try {
+      final response = await http.get(
+        Uri.parse("$baseUrl/projects.php"),
+      );
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        if (data['status'] == 'success' && data['data'] != null) {
+          final List list = data['data'];
+          return list.map((item) {
+            List<String> imageUrls = [];
+            if (item['image_urls'] is List) {
+              imageUrls = List<String>.from(item['image_urls']);
+            } else if (item['image_url'] is String) {
+              imageUrls = [item['image_url']];
+            }
+
+            return ProjectItem(
+              id: item['id']?.toString() ?? DateTime.now().millisecondsSinceEpoch.toString(),
+              title: item['title'] ?? '',
+              subTitle: item['sub_title'] ?? 'Featured Residence',
+              location: item['location'] ?? 'Mumbai',
+              pricing: item['pricing'] ?? 'N/A',
+              bhk: item['bhk'] ?? '3-BHK',
+              scope: item['scope'] ?? 'Full Interior',
+              propertyType: item['property_type'] ?? 'Apartment',
+              size: item['size'] ?? '2000 sq ft',
+              description: item['description'] ?? 'No description provided.',
+              imageUrls: imageUrls,
+            );
+          }).toList();
+        }
+      }
+    } catch (e) {
+      debugPrint('Error fetching projects: $e');
+    }
+    return [];
   }
 }

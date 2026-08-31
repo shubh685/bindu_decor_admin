@@ -6,9 +6,6 @@ class SafeNetworkImage extends StatefulWidget {
   final double? height;
   final BoxFit fit;
 
-  // Active LAN IP / Host of your backend server
-  static const String baseUrl = 'http://192.168.1.6/bindu_decor/';
-
   const SafeNetworkImage({
     super.key,
     required this.url,
@@ -26,20 +23,6 @@ class _SafeNetworkImageState extends State<SafeNetworkImage> {
   String? _errorText;
   int _retryToken = 0;
 
-  String _resolveUrl(String rawUrl) {
-    final trimmed = rawUrl.trim();
-    if (trimmed.isEmpty) return '';
-
-    // Direct HTTP/HTTPS external image URLs or base64 data URIs
-    if (Uri.parse(trimmed).hasScheme || trimmed.startsWith('data:image/')) {
-      return trimmed;
-    }
-
-    // Format relative paths to absolute URLs using baseUrl
-    final cleanPath = trimmed.startsWith('/') ? trimmed.substring(1) : trimmed;
-    return '${SafeNetworkImage.baseUrl}$cleanPath';
-  }
-
   @override
   void didUpdateWidget(covariant SafeNetworkImage oldWidget) {
     super.didUpdateWidget(oldWidget);
@@ -51,11 +34,19 @@ class _SafeNetworkImageState extends State<SafeNetworkImage> {
 
   @override
   Widget build(BuildContext context) {
-    final resolvedUrl = _resolveUrl(widget.url);
+    final rawUrl = widget.url.trim();
 
-    if (resolvedUrl.isEmpty) {
+    if (rawUrl.isEmpty) {
       return _imageFallback('No image URL');
     }
+
+    String decodedUrl = rawUrl;
+    try {
+      decodedUrl = Uri.decodeFull(rawUrl);
+    } catch (_) {}
+
+    final resolvedUrl = Uri.encodeFull(decodedUrl);
+
     if (_hasError) {
       return _imageFallback(_errorText ?? 'Image not found');
     }
