@@ -158,7 +158,6 @@ class _BlogsState extends State<Blogs> with AutomaticKeepAliveClientMixin {
           );
           uploadIndex++;
         } else if (media.url != null && media.url!.trim().isNotEmpty) {
-          // Send web URLs as photos[] field entries
           request.fields['photos[]'] = media.url!.trim();
           uploadIndex++;
         }
@@ -273,25 +272,34 @@ class _BlogsState extends State<Blogs> with AutomaticKeepAliveClientMixin {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            // Fixed horizontal layout overflow here
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              crossAxisAlignment: CrossAxisAlignment.center,
               children: [
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      _editingBlog != null ? "Edit Blog Post" : "Create New Blog",
-                      style: GoogleFonts.aleo(
-                        fontSize: 22,
-                        fontWeight: FontWeight.bold,
-                        color: AdminTheme.primaryDark,
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        _editingBlog != null ? "Edit Blog Post" : "Create New Blog",
+                        style: GoogleFonts.aleo(
+                          fontSize: 22,
+                          fontWeight: FontWeight.bold,
+                          color: AdminTheme.primaryDark,
+                        ),
                       ),
-                    ),
-                    const SizedBox(height: 4),
-                    Text("Publish articles.", style: GoogleFonts.plusJakartaSans(fontSize: 13, color: Colors.grey.shade600)),
-                  ],
+                      const SizedBox(height: 4),
+                      Text(
+                        "Publish articles.",
+                        style: GoogleFonts.plusJakartaSans(fontSize: 13, color: Colors.grey.shade600),
+                      ),
+                    ],
+                  ),
                 ),
-                Row(
+                Wrap(
+                  spacing: 8,
+                  crossAxisAlignment: WrapCrossAlignment.center,
                   children: [
                     IconButton(
                       onPressed: _isLoading ? null : () => _fetchBlogsFromApi(forceRefresh: true),

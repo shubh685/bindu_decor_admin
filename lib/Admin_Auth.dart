@@ -4,6 +4,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'AdminDashboard.dart';
 import 'Api/Auth_Api.dart';
+import 'main.dart';
 
 class LuxuryTheme {
   static const Color primaryDark = Color(0xFF0F2C23);
@@ -136,6 +137,9 @@ class _AdminAuthState extends State<AdminAuth> {
           password: _passwordController.text,
         );
 
+        // Declared resData variable from login response
+        final resData = data;
+
         if (data['status'] == true) {
           // Save login details to SharedPreferences
           await _handleLoginResponse(data);
@@ -143,11 +147,8 @@ class _AdminAuthState extends State<AdminAuth> {
           _showSnackBar("Signed in successfully!");
 
           if (!mounted) return;
-
-          Navigator.pushReplacement(
-            context,
-            MaterialPageRoute(builder: (context) => const AdminDashboard()),
-          );
+          await SessionManager.saveSession(resData['user'] ?? {});
+          Navigator.pushReplacement(context, MaterialPageRoute(builder: (context) => const AdminDashboard()),);
         } else {
           _showSnackBar(
             data['message'] ?? "Invalid email or password",
@@ -549,10 +550,10 @@ class _AdminAuthState extends State<AdminAuth> {
                           child: AnimatedDefaultTextStyle(
                             duration: const Duration(milliseconds: 200),
                             style: GoogleFonts.plusJakartaSans(
-                              fontWeight: FontWeight.bold,
-                              color: Colors.white.withOpacity(
-                                _authMode == AuthMode.signIn ? 1.0 : 0.6,
-                              ), fontSize: 13, letterSpacing: 1.2),
+                                fontWeight: FontWeight.bold,
+                                color: Colors.white.withOpacity(
+                                  _authMode == AuthMode.signIn ? 1.0 : 0.6,
+                                ), fontSize: 13, letterSpacing: 1.2),
                             child: const Text("SIGN IN"),
                           ),
                         ),
