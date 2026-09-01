@@ -1,7 +1,6 @@
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import 'AdminDashboard.dart';
 import 'Api/Auth_Api.dart';
 import 'main.dart';
@@ -96,26 +95,6 @@ class _AdminAuthState extends State<AdminAuth> {
     );
   }
 
-  // =================================================
-  // SAVE DATA TO SHARED PREFERENCES
-  // =================================================
-  Future<void> _handleLoginResponse(Map<String, dynamic> responseData) async {
-    if (responseData['status'] == true) {
-      final prefs = await SharedPreferences.getInstance();
-
-      // Extract user object from PHP response
-      final user = responseData['user'];
-
-      if (user != null) {
-        // Save login session and user details
-        await prefs.setBool('is_logged_in', true);
-        await prefs.setInt('user_id', user['id'] ?? 0);
-        await prefs.setString('user_name', user['name'] ?? '');
-        await prefs.setString('user_email', user['email'] ?? '');
-      }
-    }
-  }
-
   Future<void> _handleFormSubmit() async {
     if (!(_formKey.currentState?.validate() ?? false)) {
       return;
@@ -137,18 +116,18 @@ class _AdminAuthState extends State<AdminAuth> {
           password: _passwordController.text,
         );
 
-        // Declared resData variable from login response
-        final resData = data;
-
         if (data['status'] == true) {
-          // Save login details to SharedPreferences
-          await _handleLoginResponse(data);
+          // Save login timestamp and user details directly via SessionManager
+          final userData = Map<String, dynamic>.from(data['user'] ?? {});
+          await SessionManager.saveSession(userData);
 
           _showSnackBar("Signed in successfully!");
 
           if (!mounted) return;
-          await SessionManager.saveSession(resData['user'] ?? {});
-          Navigator.pushReplacement(context, MaterialPageRoute(builder: (context) => const AdminDashboard()),);
+          Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(builder: (context) => const AdminDashboard()),
+          );
         } else {
           _showSnackBar(
             data['message'] ?? "Invalid email or password",
@@ -515,7 +494,6 @@ class _AdminAuthState extends State<AdminAuth> {
         Positioned.fill(
           child: LayoutBuilder(
             builder: (context, constraints) {
-              final double logoSize = constraints.maxHeight < 400 ? 60.0 : 80.0;
               final double topPadding = constraints.maxHeight * 0.05;
 
               return SafeArea(
@@ -528,12 +506,14 @@ class _AdminAuthState extends State<AdminAuth> {
                       children: [
                         // Responsive Logo Box
                         SizedBox(
-                          height: 80, width: 120,
+                          height: 80,
+                          width: 120,
                           child: ClipRRect(
                             borderRadius: BorderRadius.circular(10),
                             child: Image.asset(
                               "assets/photos/bindu.png",
-                              fit: BoxFit.contain, color: Colors.white,
+                              fit: BoxFit.contain,
+                              color: Colors.white,
                               errorBuilder: (context, error, stackTrace) => const Icon(
                                 Icons.business,
                                 color: LuxuryTheme.primaryDark,
@@ -550,10 +530,13 @@ class _AdminAuthState extends State<AdminAuth> {
                           child: AnimatedDefaultTextStyle(
                             duration: const Duration(milliseconds: 200),
                             style: GoogleFonts.plusJakartaSans(
-                                fontWeight: FontWeight.bold,
-                                color: Colors.white.withOpacity(
-                                  _authMode == AuthMode.signIn ? 1.0 : 0.6,
-                                ), fontSize: 13, letterSpacing: 1.2),
+                              fontWeight: FontWeight.bold,
+                              color: Colors.white.withOpacity(
+                                _authMode == AuthMode.signIn ? 1.0 : 0.6,
+                              ),
+                              fontSize: 13,
+                              letterSpacing: 1.2,
+                            ),
                             child: const Text("SIGN IN"),
                           ),
                         ),

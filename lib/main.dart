@@ -54,6 +54,7 @@ class MyHttpOverrides extends HttpOverrides {
 }
 
 // Session Manager helper handling 10-day expiration linked with login.php user response
+// Session Manager helper handling 10-day expiration linked with login.php user response
 class SessionManager {
   static const String keyIsLoggedIn = "is_logged_in";
   static const String keyLoginTimestamp = "login_timestamp";
@@ -91,13 +92,18 @@ class SessionManager {
     await prefs.setInt(keyLoginTimestamp, DateTime.now().millisecondsSinceEpoch);
 
     if (userData.containsKey('id')) {
-      await prefs.setInt(keyUserId, userData['id']);
+      final idValue = userData['id'];
+      if (idValue is int) {
+        await prefs.setInt(keyUserId, idValue);
+      } else if (idValue is String) {
+        await prefs.setInt(keyUserId, int.tryParse(idValue) ?? 0);
+      }
     }
     if (userData.containsKey('name')) {
-      await prefs.setString(keyUserName, userData['name']);
+      await prefs.setString(keyUserName, userData['name']?.toString() ?? '');
     }
     if (userData.containsKey('email')) {
-      await prefs.setString(keyUserEmail, userData['email']);
+      await prefs.setString(keyUserEmail, userData['email']?.toString() ?? '');
     }
   }
 
