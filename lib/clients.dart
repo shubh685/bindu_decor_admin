@@ -1,4 +1,3 @@
-
 // ==========================================
 // 3. CLIENT DOMAIN MANAGEMENT SCREEN
 // ==========================================
@@ -42,26 +41,32 @@ class _ClientDomainManagerState extends State<ClientDomainManager> {
         final Uint8List? imageBytes = media.bytes;
 
         final response = await OperationsApi.addClient(
-          imageUrl: media.url,
+          imageUrl: media.url ?? '',
           imageBytes: imageBytes,
-          imageFileName: media.fileName,
+          imageFileName: media.fileName ?? '',
         );
 
         if (response['status'] == 'success') {
-          final uploadedUrl = response['img_url'] ?? response['image_url'] ?? media.url ?? '';
+          String uploadedUrl = response['img_url']?.toString() ??
+              response['image_url']?.toString() ??
+              media.url ?? '';
+
+          String resolvedUrl = OperationsApi.resolveImageUrl(uploadedUrl);
 
           setState(() {
             AppDataStore.clientLogos.add(
               ClientItems(
                 id: response['id']?.toString() ?? '',
-                imgUrl: uploadedUrl,
+                imgUrl: resolvedUrl,
+                imageUrl: resolvedUrl,
+                imageUrlFull: resolvedUrl,
               ),
             );
           });
         } else {
           if (mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(content: Text(response['message'] ?? "Failed to save logo")),
+              SnackBar(content: Text(response['message']?.toString() ?? "Failed to save logo")),
             );
           }
         }
@@ -232,7 +237,7 @@ class _ClientDomainManagerState extends State<ClientDomainManager> {
                           ),
                           child: ClipRRect(
                             borderRadius: BorderRadius.circular(10),
-                            child: buildUniversalImage(MediaItem(url: item.imgUrl)),
+                            child: _buildClientImage(item.safeImageUrl),
                           ),
                         ),
                         Positioned(
@@ -255,6 +260,71 @@ class _ClientDomainManagerState extends State<ClientDomainManager> {
             ),
           )
         ],
+      ),
+    );
+  }
+
+  Widget _buildClientImage(String rawUrl) {
+    if (rawUrl.trim().isEmpty) {
+      return _buildPlaceholder();
+    }
+
+    final String imageUrl = OperationsApi.resolveImageUrl(rawUrl);
+
+    return Image.network(
+      imageUrl,
+      fit: BoxFit.contain,
+      errorBuilder: (context, error, stackTrace) {
+        debugPrint('❌ Image load error: $error');
+        debugPrint('❌ Failed URL: $imageUrl');
+
+        return _buildPlaceholder();
+      },
+      loadingBuilder: (context, child, loadingProgress) {
+        if (loadingProgress == null) return child;
+        return _buildLoadingPlaceholder();
+      },
+    );
+  }
+
+  Widget _buildPlaceholder() {
+    return Container(
+      color: Colors.grey.shade100,
+      child: Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              Icons.broken_image,
+              size: 32,
+              color: Colors.grey.shade400,
+            ),
+            const SizedBox(height: 4),
+            Text(
+              'Image Not Found',
+              style: GoogleFonts.plusJakartaSans(
+                fontSize: 10,
+                color: Colors.grey.shade500,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildLoadingPlaceholder() {
+    return Container(
+      color: Colors.grey.shade100,
+      child: Center(
+        child: SizedBox(
+          width: 30,
+          height: 30,
+          child: CircularProgressIndicator(
+            strokeWidth: 2,
+            color: AdminTheme.primaryDark,
+          ),
+        ),
       ),
     );
   }

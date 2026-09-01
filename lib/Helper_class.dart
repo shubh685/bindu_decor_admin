@@ -1,5 +1,4 @@
 import 'dart:convert';
-import 'AdminDashboard.dart';
 
 const String _kBaseUrl = 'http://192.168.1.48/bindu_decor';
 
@@ -10,20 +9,16 @@ String _resolveImageUrl(String raw) {
   if (value.startsWith('assets/')) return value;
   if (value.startsWith('data:image/')) return value;
 
-  String cleanPath = value;
-  final uri = Uri.tryParse(value);
-  if (uri != null && (uri.scheme == 'http' || uri.scheme == 'https')) {
-    cleanPath = uri.path;
-  } else if (value.startsWith('//')) {
-    final parsed = Uri.tryParse('https:$value');
-    cleanPath = parsed?.path ?? value;
+  // If already an absolute HTTP/HTTPS URL or includes image.php proxy, preserve it completely
+  if (value.startsWith('http://') || value.startsWith('https://') || value.contains('image.php')) {
+    return value;
   }
 
-  cleanPath = _cleanPath(cleanPath);
+  String cleanPath = _cleanPath(value);
   if (cleanPath.isEmpty) return '';
 
   final baseUrl = _getBaseUrl();
-  return '$baseUrl/$cleanPath';
+  return '$baseUrl/image.php?path=${Uri.encodeComponent(cleanPath)}';
 }
 
 String _cleanPath(String path) {
@@ -258,7 +253,9 @@ class ClientItems {
     );
   }
 
+  // Guarantees non-nullable string returns for Flutter widgets
   String get primaryImageUrl => imageUrlFull ?? imageUrl ?? imgUrl ?? '';
+  String get safeImageUrl => imageUrlFull ?? imageUrl ?? imgUrl ?? '';
 }
 
 class BlogItem {

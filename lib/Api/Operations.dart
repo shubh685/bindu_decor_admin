@@ -1,5 +1,4 @@
 import 'dart:convert';
-import 'dart:io';
 import 'dart:typed_data';
 import 'package:flutter/cupertino.dart';
 import 'package:http/http.dart' as http;
@@ -8,9 +7,6 @@ import 'package:bindu_decor_admin/Helper_class.dart';
 
 class OperationsApi {
   // ⚠️ CHANGE THIS TO YOUR ACTUAL SERVER URL
-  // For local testing on same PC: use localhost
-  // For Android emulator: use 10.0.2.2
-  // For real device: use your PC's actual LAN IP
   static const String baseUrl = 'http://192.168.1.48/bindu_decor/';
 
   // ==========================================
@@ -20,60 +16,30 @@ class OperationsApi {
     if (imagePath == null || imagePath.isEmpty) return '';
 
     String raw = imagePath.trim();
-    print('🔍 RESOLVING IMAGE: "$raw"');
 
-    // Data URI - return as is
-    if (raw.startsWith('data:image/')) {
+    // If it's already a full HTTP/HTTPS URL or contains image.php, return as-is
+    if (raw.startsWith('http://') || raw.startsWith('https://') || raw.contains('image.php')) {
       return raw;
     }
 
-    // Asset - return as is
-    if (raw.startsWith('assets/')) {
+    // Data URI / Assets
+    if (raw.startsWith('data:image/') || raw.startsWith('assets/')) {
       return raw;
     }
 
-    // Already pointing at our image.php - return as is
-    if (raw.contains('image.php?path=')) {
-      print('✅ Already an image.php URL: $raw');
-      return raw;
-    }
-
-    String cleanPath = raw;
-
-    // If it's a full URL (any host), extract just the path portion
-    if (raw.startsWith('http://') || raw.startsWith('https://')) {
-      try {
-        final uri = Uri.parse(raw);
-        cleanPath = uri.path;
-      } catch (e) {
-        cleanPath = raw;
-      }
-    }
-
-    // Normalize
-    cleanPath = cleanPath.replaceAll('\\', '/');
+    String cleanPath = raw.replaceAll('\\', '/');
     while (cleanPath.startsWith('/')) {
       cleanPath = cleanPath.substring(1);
     }
 
-    // Strip any duplicate bindu_decor/ or uploads/uploads/ prefixes
-    List<String> prefixes = [
-      'http://localhost/bindu_decor/',
-      'http://192.168.1.48/bindu_decor/',
-      'bindu_decor/',
-    ];
-    for (String prefix in prefixes) {
-      if (cleanPath.toLowerCase().startsWith(prefix.toLowerCase())) {
-        cleanPath = cleanPath.substring(prefix.length);
-        break;
-      }
+    if (cleanPath.toLowerCase().startsWith('bindu_decor/')) {
+      cleanPath = cleanPath.substring('bindu_decor/'.length);
     }
-    while (cleanPath.startsWith('/')) {
-      cleanPath = cleanPath.substring(1);
-    }
+
     if (cleanPath.toLowerCase().startsWith('uploads/uploads/')) {
       cleanPath = cleanPath.substring('uploads/'.length);
     }
+
     if (!cleanPath.toLowerCase().startsWith('uploads/') && cleanPath.isNotEmpty) {
       cleanPath = 'uploads/$cleanPath';
     }
@@ -81,13 +47,9 @@ class OperationsApi {
     if (cleanPath.isEmpty) return '';
 
     String base = baseUrl.endsWith('/') ? baseUrl : '$baseUrl/';
-    final fullUrl = '${base}image.php?path=${Uri.encodeComponent(cleanPath)}';
-
-    print('✅ RESOLVED IMAGE URL: $fullUrl');
-    return fullUrl;
+    return '${base}image.php?path=${Uri.encodeComponent(cleanPath)}';
   }
 
-  // Helper: check successful status codes (200 or 201)
   static bool _isSuccessStatus(int status) => status == 200 || status == 201;
 
   // ==========================================
@@ -105,10 +67,8 @@ class OperationsApi {
       final uri = Uri.parse('${baseUrl}products.php?action=add');
       final request = http.MultipartRequest('POST', uri);
 
-      // add normal fields (including image_urls which should be a JSON string for multiple URLs)
       request.fields.addAll(fields);
 
-      // normalize bytesList & names
       final List<Uint8List> bytesList = imageBytesList ??
           (imageBytes != null ? [imageBytes] : []);
       final List<String>? namesList = fileNamesList ?? (imageFileName != null ? [imageFileName] : null);
@@ -201,10 +161,8 @@ class OperationsApi {
       final uri = Uri.parse('${baseUrl}projects.php?action=add');
       final request = http.MultipartRequest('POST', uri);
 
-      // Add fields (including image_urls as JSON string if provided)
       request.fields.addAll(fields);
 
-      // Normalize bytes/names
       final List<Uint8List> bytesList = imageBytesList ??
           (imageBytes != null ? [imageBytes] : []);
       final List<String>? namesList = fileNamesList ?? (imageFileName != null ? [imageFileName] : null);
@@ -378,7 +336,7 @@ class OperationsApi {
 
   static void _attachFilesToRequest(
       http.MultipartRequest request,
-      String fieldBase, // 'images' or 'imageFile' or 'imageFile' etc.
+      String fieldBase,
       List<Uint8List> bytesList,
       List<String>? namesList,
       ) {
@@ -397,7 +355,7 @@ class OperationsApi {
       else if (fnameLower.endsWith('.gif')) subtype = 'gif';
       else if (fnameLower.endsWith('.bmp')) subtype = 'bmp';
 
-      final fieldName = multiple ? fieldNameForMultiple : fieldBase; // if single file, use 'images' etc.
+      final fieldName = multiple ? fieldNameForMultiple : fieldBase;
 
       request.files.add(
         http.MultipartFile.fromBytes(
@@ -410,11 +368,10 @@ class OperationsApi {
     }
   }
 
-  // In Operations.dart, update the fetch methods
   static Future<List<DecorProductItem>> fetchProducts() async {
     try {
       final response = await http.get(
-        Uri.parse("$baseUrl/products.php"),
+        Uri.parse("${baseUrl}products.php"),
       );
 
       if (response.statusCode == 200) {
@@ -450,7 +407,7 @@ class OperationsApi {
   static Future<List<ProjectItem>> fetchProjects() async {
     try {
       final response = await http.get(
-        Uri.parse("$baseUrl/projects.php"),
+        Uri.parse("${baseUrl}projects.php"),
       );
 
       if (response.statusCode == 200) {
