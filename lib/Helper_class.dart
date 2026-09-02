@@ -1,25 +1,6 @@
 import 'dart:convert';
 
-enum Environment { local, userWeb, adminWeb }
-
-// Configurable environment selector
-class ApiConfig {
-  static const Environment currentEnv = Environment.userWeb;
-
-  static String get baseUrl {
-    switch (currentEnv) {
-      case Environment.local:
-        return 'http://192.168.1.48/bindu_decor';
-      case Environment.userWeb:
-        return 'https://yellow-woodpecker-430323.hostingersite.com/bindu_web';
-      case Environment.adminWeb:
-        return 'https://yellow-woodpecker-430323.hostingersite.com/bindu_admin_web';
-    }
-  }
-}
-
-// Global fallback URL derived from configuration
-String get _kBaseUrl => ApiConfig.baseUrl;
+const String _kBaseUrl = 'http://192.168.1.48/bindu_decor';
 
 String _resolveImageUrl(String raw) {
   var value = raw.trim();
@@ -68,16 +49,7 @@ String _getBaseUrl() {
     if (origin.host.isNotEmpty && origin.host != 'localhost') {
       final scheme = origin.scheme.isEmpty ? 'http' : origin.scheme;
       final port = origin.hasPort ? ':${origin.port}' : '';
-
-      // Dynamic route matching based on pathname context
-      final path = origin.path;
-      if (path.contains('/bindu_admin_web')) {
-        return '$scheme://${origin.host}$port/bindu_admin_web';
-      } else if (path.contains('/bindu_web')) {
-        return '$scheme://${origin.host}$port/bindu_web';
-      }
-
-      return '$scheme://${origin.host}$port';
+      return '$scheme://${origin.host}$port/bindu_decor';
     }
   } catch (e) {}
   return _kBaseUrl;
@@ -123,7 +95,7 @@ class ProjectItem {
       if (raw is List) {
         for (var item in raw) {
           final url = item.toString().trim();
-          if (url.isNotEmpty) images.add(_resolveImageUrl(url));
+          if (url.isNotEmpty) images.add(url);
         }
       } else if (raw is String) {
         try {
@@ -131,27 +103,27 @@ class ProjectItem {
           if (decoded is List) {
             for (var item in decoded) {
               final url = item.toString().trim();
-              if (url.isNotEmpty) images.add(_resolveImageUrl(url));
+              if (url.isNotEmpty) images.add(url);
             }
           } else {
             final url = raw.trim();
-            if (url.isNotEmpty) images.add(_resolveImageUrl(url));
+            if (url.isNotEmpty) images.add(url);
           }
         } catch (_) {
           final url = raw.trim();
-          if (url.isNotEmpty) images.add(_resolveImageUrl(url));
+          if (url.isNotEmpty) images.add(url);
         }
       }
     }
 
     if (images.isEmpty && map['image_url'] != null) {
       final url = map['image_url'].toString().trim();
-      if (url.isNotEmpty) images.add(_resolveImageUrl(url));
+      if (url.isNotEmpty) images.add(url);
     }
 
     if (images.isEmpty && map['imageUrl'] != null) {
       final url = map['imageUrl'].toString().trim();
-      if (url.isNotEmpty) images.add(_resolveImageUrl(url));
+      if (url.isNotEmpty) images.add(url);
     }
 
     return ProjectItem(
@@ -204,7 +176,7 @@ class DecorProductItem {
       if (raw is List) {
         for (var item in raw) {
           final url = item.toString().trim();
-          if (url.isNotEmpty) images.add(_resolveImageUrl(url));
+          if (url.isNotEmpty) images.add(url);
         }
       } else if (raw is String) {
         try {
@@ -212,27 +184,27 @@ class DecorProductItem {
           if (decoded is List) {
             for (var item in decoded) {
               final url = item.toString().trim();
-              if (url.isNotEmpty) images.add(_resolveImageUrl(url));
+              if (url.isNotEmpty) images.add(url);
             }
           } else {
             final url = raw.trim();
-            if (url.isNotEmpty) images.add(_resolveImageUrl(url));
+            if (url.isNotEmpty) images.add(url);
           }
         } catch (_) {
           final url = raw.trim();
-          if (url.isNotEmpty) images.add(_resolveImageUrl(url));
+          if (url.isNotEmpty) images.add(url);
         }
       }
     }
 
     if (images.isEmpty && map['image_url'] != null) {
       final url = map['image_url'].toString().trim();
-      if (url.isNotEmpty) images.add(_resolveImageUrl(url));
+      if (url.isNotEmpty) images.add(url);
     }
 
     if (images.isEmpty && map['imageUrl'] != null) {
       final url = map['imageUrl'].toString().trim();
-      if (url.isNotEmpty) images.add(_resolveImageUrl(url));
+      if (url.isNotEmpty) images.add(url);
     }
 
     return DecorProductItem(

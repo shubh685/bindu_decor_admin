@@ -8,14 +8,11 @@ import 'AdminDashboard.dart';
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // Set preferred orientations
+  // Set preferred orientations for supported platforms/devices
   await SystemChrome.setPreferredOrientations([
     DeviceOrientation.portraitUp,
     DeviceOrientation.portraitDown,
   ]);
-
-  // CRITICAL: Override HTTP client for all network requests
-  HttpOverrides.global = MyHttpOverrides();
 
   // Check 10-day auto login session state
   final bool isLoggedIn = await SessionManager.isSessionValid();
@@ -74,8 +71,10 @@ class SessionManager {
       return false;
     }
 
-    final DateTime loginDate = DateTime.fromMillisecondsSinceEpoch(loginTimestamp);
-    final DateTime expirationDate = loginDate.add(const Duration(days: sessionDurationDays));
+    final DateTime loginDate =
+    DateTime.fromMillisecondsSinceEpoch(loginTimestamp);
+    final DateTime expirationDate =
+    loginDate.add(const Duration(days: sessionDurationDays));
 
     if (DateTime.now().isAfter(expirationDate)) {
       await clearSession();
@@ -89,7 +88,8 @@ class SessionManager {
   static Future<void> saveSession(Map<String, dynamic> userData) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool(keyIsLoggedIn, true);
-    await prefs.setInt(keyLoginTimestamp, DateTime.now().millisecondsSinceEpoch);
+    await prefs.setInt(
+        keyLoginTimestamp, DateTime.now().millisecondsSinceEpoch);
 
     if (userData.containsKey('id')) {
       final idValue = userData['id'];

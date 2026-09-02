@@ -1,27 +1,14 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 
-enum Environment { local, userWeb, adminWeb }
-
 class Api {
 
   // =====================================================
   // CHANGE THIS TO YOUR LIVE HOSTINGER URL
   // =====================================================
 
-  static const Environment currentEnv = Environment.userWeb;
-
-  static String get baseUrl {
-    switch (currentEnv) {
-      case Environment.local:
-        return 'http://192.168.1.48/bindu_decor/';
-      case Environment.userWeb:
-        return 'https://yellow-woodpecker-430323.hostingersite.com/bindu_web/';
-      case Environment.adminWeb:
-        return 'https://yellow-woodpecker-430323.hostingersite.com/bindu_admin_web/';
-    }
-  }
-
+  static const String baseUrl =
+      "http://192.168.1.48/bindu_decor/";
 
   // =====================================================
   // LOGIN
