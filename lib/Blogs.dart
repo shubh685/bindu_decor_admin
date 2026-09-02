@@ -1,6 +1,8 @@
 import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
+import 'package:flutter_quill/flutter_quill.dart' as quill;
 import 'package:google_fonts/google_fonts.dart';
 import 'package:http/http.dart' as http;
 import 'package:intl/intl.dart';
@@ -29,9 +31,35 @@ class _BlogsState extends State<Blogs> with AutomaticKeepAliveClientMixin {
 
   final TextEditingController _titleController = TextEditingController();
   final TextEditingController _subjectController = TextEditingController();
-  final TextEditingController _descriptionController = TextEditingController();
   final TextEditingController _authorController = TextEditingController();
   final TextEditingController _webUrlController = TextEditingController();
+
+  // Quill Editor Controller & FocusNode
+  late quill.QuillController _quillController;
+  final FocusNode _editorFocusNode = FocusNode();
+  final ScrollController _editorScrollController = ScrollController();
+  final ScrollController _toolbarScrollController = ScrollController();
+
+  // Font Selection State (MS Word Style)
+  String _selectedFontFamily = 'Plus Jakarta Sans';
+  double _selectedFontSize = 14.0;
+
+  final Map<String, TextStyle Function({TextStyle? textStyle})> _googleFontMap = {
+    'Plus Jakarta Sans': GoogleFonts.plusJakartaSans,
+    'Cormorant Garamond': GoogleFonts.cormorantGaramond,
+    'Roboto': GoogleFonts.roboto,
+    'Open Sans': GoogleFonts.openSans,
+    'Lato': GoogleFonts.lato,
+    'Montserrat': GoogleFonts.montserrat,
+    'Poppins': GoogleFonts.poppins,
+    'Playfair Display': GoogleFonts.playfairDisplay,
+    'Lora': GoogleFonts.lora,
+    'Oswald': GoogleFonts.oswald,
+    'Raleway': GoogleFonts.raleway,
+    'Merriweather': GoogleFonts.merriweather,
+  };
+
+  final List<double> _fontSizeOptions = [10.0, 12.0, 14.0, 16.0, 18.0, 20.0, 24.0, 28.0, 32.0, 36.0];
 
   List<MediaItem> _selectedPhotos = [];
   BlogItem? _editingBlog;
@@ -47,6 +75,7 @@ class _BlogsState extends State<Blogs> with AutomaticKeepAliveClientMixin {
   @override
   void initState() {
     super.initState();
+    _initQuillController("");
 
     if (BlogDataStore.blogs.isEmpty) {
       _fetchBlogsFromApi();
@@ -57,15 +86,41 @@ class _BlogsState extends State<Blogs> with AutomaticKeepAliveClientMixin {
     });
   }
 
+  void _initQuillController(String content) {
+    if (content.trim().startsWith('[')) {
+      try {
+        final doc = quill.Document.fromJson(jsonDecode(content));
+        _quillController = quill.QuillController(
+          document: doc,
+          selection: const TextSelection.collapsed(offset: 0),
+        );
+        return;
+      } catch (_) {}
+    }
+
+    // Fallback for plain text format
+    final doc = quill.Document();
+    if (content.isNotEmpty) {
+      doc.insert(0, content);
+    }
+    _quillController = quill.QuillController(
+      document: doc,
+      selection: const TextSelection.collapsed(offset: 0),
+    );
+  }
+
   @override
   void dispose() {
     _timer?.cancel();
     _liveTimeNotifier.dispose();
     _titleController.dispose();
     _subjectController.dispose();
-    _descriptionController.dispose();
     _authorController.dispose();
     _webUrlController.dispose();
+    _quillController.dispose();
+    _editorFocusNode.dispose();
+    _editorScrollController.dispose();
+    _toolbarScrollController.dispose();
     super.dispose();
   }
 
@@ -101,13 +156,22 @@ class _BlogsState extends State<Blogs> with AutomaticKeepAliveClientMixin {
     _formKey.currentState?.reset();
     _titleController.clear();
     _subjectController.clear();
-    _descriptionController.clear();
     _authorController.clear();
     _webUrlController.clear();
     setState(() {
+      _initQuillController("");
       _selectedPhotos = [];
       _editingBlog = null;
     });
+  }
+
+  String _getQuillContent() {
+    final delta = _quillController.document.toDelta();
+    return jsonEncode(delta.toJson());
+  }
+
+  String _getQuillPlainText() {
+    return _quillController.document.toPlainText().trim();
   }
 
   Future<void> _saveBlog(String status) async {
@@ -115,11 +179,17 @@ class _BlogsState extends State<Blogs> with AutomaticKeepAliveClientMixin {
 
     if (!(_formKey.currentState?.validate() ?? false)) return;
 
+    final descriptionText = _getQuillPlainText();
+    if (descriptionText.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Description cannot be empty.')),
+      );
+      return;
+    }
+
     if (_selectedPhotos.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Please add at least one blog image.'),
-        ),
+        const SnackBar(content: Text('Please add at least one blog image.')),
       );
       return;
     }
@@ -132,7 +202,7 @@ class _BlogsState extends State<Blogs> with AutomaticKeepAliveClientMixin {
 
       request.fields['title'] = _titleController.text.trim();
       request.fields['subject'] = _subjectController.text.trim();
-      request.fields['description'] = _descriptionController.text.trim();
+      request.fields['description'] = _getQuillContent(); // JSON delta payload
       request.fields['author_name'] = _authorController.text.trim();
       request.fields['status'] = status;
 
@@ -142,7 +212,6 @@ class _BlogsState extends State<Blogs> with AutomaticKeepAliveClientMixin {
       }
 
       int uploadIndex = 0;
-
       for (final media in _selectedPhotos) {
         if (media.hasBytes && media.bytes != null) {
           final fileName = media.fileName?.isNotEmpty == true
@@ -230,17 +299,15 @@ class _BlogsState extends State<Blogs> with AutomaticKeepAliveClientMixin {
       _editingBlog = blog;
       _titleController.text = blog.title;
       _subjectController.text = blog.subject;
-      _descriptionController.text = blog.description;
       _authorController.text = blog.authorName;
+      _initQuillController(blog.description);
       _selectedPhotos = blog.photos.map((p) => MediaItem(url: p)).toList();
     });
   }
 
   Future<void> _pickImages() async {
     final ImagePicker picker = ImagePicker();
-    final List<XFile> images = await picker.pickMultiImage(
-      imageQuality: 80,
-    );
+    final List<XFile> images = await picker.pickMultiImage(imageQuality: 80);
 
     if (images.isNotEmpty) {
       final List<MediaItem> newItems = [];
@@ -258,6 +325,187 @@ class _BlogsState extends State<Blogs> with AutomaticKeepAliveClientMixin {
     }
   }
 
+  // Opens History Panel showing Drafted and Published Blogs
+  void _showHistoryModal(BuildContext context) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) {
+        return Container(
+          height: MediaQuery.of(context).size.height * 0.75,
+          decoration: const BoxDecoration(
+            color: Color(0xFFF8F9FA),
+            borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+          ),
+          padding: const EdgeInsets.all(20),
+          child: StatefulBuilder(
+            builder: (context, setModalState) {
+              final draftBlogs = BlogDataStore.blogs.where((b) => b.status != 'Published').toList();
+              final publishedBlogs = BlogDataStore.blogs.where((b) => b.status == 'Published').toList();
+
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Row(
+                        children: [
+                          const Icon(Icons.history, color: Color(0xFF0073AA), size: 24),
+                          const SizedBox(width: 8),
+                          Text(
+                            "Blog History & Archives",
+                            style: GoogleFonts.plusJakartaSans(
+                              fontSize: 18,
+                              fontWeight: FontWeight.bold,
+                              color: const Color(0xFF23282D),
+                            ),
+                          ),
+                        ],
+                      ),
+                      Row(
+                        children: [
+                          IconButton(
+                            icon: const Icon(Icons.refresh, color: Colors.grey),
+                            onPressed: () async {
+                              await _fetchBlogsFromApi(forceRefresh: true);
+                              setModalState(() {});
+                            },
+                            tooltip: "Sync History",
+                          ),
+                          IconButton(
+                            icon: const Icon(Icons.close),
+                            onPressed: () => Navigator.pop(context),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                  const Divider(),
+                  const SizedBox(height: 10),
+                  Expanded(
+                    child: ListView(
+                      children: [
+                        _buildHistorySectionHeader("Drafted Posts", draftBlogs.length, Colors.amber.shade800),
+                        const SizedBox(height: 8),
+                        if (draftBlogs.isEmpty)
+                          const Padding(
+                            padding: EdgeInsets.all(8.0),
+                            child: Text("No draft posts found.", style: TextStyle(color: Colors.grey, fontSize: 13)),
+                          )
+                        else
+                          ...draftBlogs.map((b) => _buildHistoryCardItem(b, () {
+                            Navigator.pop(context);
+                            _editBlog(b);
+                          })),
+                        const SizedBox(height: 20),
+                        _buildHistorySectionHeader("Published Posts", publishedBlogs.length, Colors.green.shade700),
+                        const SizedBox(height: 8),
+                        if (publishedBlogs.isEmpty)
+                          const Padding(
+                            padding: EdgeInsets.all(8.0),
+                            child: Text("No published posts found.", style: TextStyle(color: Colors.grey, fontSize: 13)),
+                          )
+                        else
+                          ...publishedBlogs.map((b) => _buildHistoryCardItem(b, () {
+                            Navigator.pop(context);
+                            _editBlog(b);
+                          })),
+                      ],
+                    ),
+                  ),
+                ],
+              );
+            },
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildHistorySectionHeader(String title, int count, Color color) {
+    return Row(
+      children: [
+        Container(
+          width: 4,
+          height: 16,
+          decoration: BoxDecoration(color: color, borderRadius: BorderRadius.circular(2)),
+        ),
+        const SizedBox(width: 8),
+        Text(
+          "$title ($count)",
+          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: color),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildHistoryCardItem(BlogItem blog, VoidCallback onEdit) {
+    return Card(
+      elevation: 0,
+      margin: const EdgeInsets.only(bottom: 8),
+      shape: RoundedRectangleBorder(
+        side: BorderSide(color: Colors.grey.shade300),
+        borderRadius: BorderRadius.circular(6),
+      ),
+      child: ListTile(
+        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+        leading: ClipRRect(
+          borderRadius: BorderRadius.circular(4),
+          child: Container(
+            width: 46,
+            height: 46,
+            color: Colors.grey.shade200,
+            child: blog.photos.isNotEmpty
+                ? buildUniversalImage(MediaItem(url: blog.photos.first), fit: BoxFit.cover)
+                : const Icon(Icons.article, size: 24, color: Colors.grey),
+          ),
+        ),
+        title: Text(
+          blog.title,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
+        ),
+        subtitle: Text(
+          "By ${blog.authorName} • Subject: ${blog.subject}",
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: TextStyle(fontSize: 12, color: Colors.grey.shade700),
+        ),
+        trailing: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            IconButton(
+              icon: const Icon(Icons.edit_note, color: Color(0xFF0073AA)),
+              onPressed: onEdit,
+              tooltip: "Edit Post",
+            ),
+            IconButton(
+              icon: const Icon(Icons.delete_outline, color: Colors.redAccent, size: 20),
+              onPressed: () async {
+                await _deleteBlog(blog.id);
+                setState(() {});
+              },
+              tooltip: "Delete Post",
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  TextStyle _getFormattedTextStyle() {
+    final fontBuilder = _googleFontMap[_selectedFontFamily] ?? GoogleFonts.plusJakartaSans;
+    return fontBuilder(
+      textStyle: TextStyle(
+        fontSize: _selectedFontSize,
+        color: const Color(0xFF23282D),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     super.build(context);
@@ -266,543 +514,547 @@ class _BlogsState extends State<Blogs> with AutomaticKeepAliveClientMixin {
     final publishedBlogs = BlogDataStore.blogs.where((b) => b.status == 'Published').toList();
 
     return Scaffold(
-      backgroundColor: AdminTheme.bgCanvas,
+      backgroundColor: const Color(0xFFF1F1F1),
       body: SingleChildScrollView(
-        padding: const EdgeInsets.all(24.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Fixed horizontal layout overflow here
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              crossAxisAlignment: CrossAxisAlignment.center,
-              children: [
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        _editingBlog != null ? "Edit Blog Post" : "Create New Blog",
-                        style: GoogleFonts.aleo(
-                          fontSize: 22,
-                          fontWeight: FontWeight.bold,
-                          color: AdminTheme.primaryDark,
-                        ),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        "Publish articles.",
-                        style: GoogleFonts.plusJakartaSans(fontSize: 13, color: Colors.grey.shade600),
-                      ),
-                    ],
-                  ),
-                ),
-                Wrap(
-                  spacing: 8,
-                  crossAxisAlignment: WrapCrossAlignment.center,
-                  children: [
-                    IconButton(
-                      onPressed: _isLoading ? null : () => _fetchBlogsFromApi(forceRefresh: true),
-                      icon: _isLoading
-                          ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2))
-                          : const Icon(Icons.refresh_rounded),
-                      color: AdminTheme.primaryDark,
-                      tooltip: "Refresh List",
+        padding: const EdgeInsets.all(20.0),
+        child: Form(
+          key: _formKey,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Top Bar with Title and Right Action (History Icon)
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    _editingBlog != null ? "Edit Post" : "Add New Post",
+                    style: GoogleFonts.openSans(
+                      fontSize: 23,
+                      fontWeight: FontWeight.w400,
+                      color: const Color(0xFF23282D),
                     ),
-                    if (_editingBlog != null)
-                      ElevatedButton.icon(
-                        onPressed: _resetForm,
-                        icon: const Icon(Icons.add, size: 16),
-                        label: const Text("New Blog"),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: AdminTheme.primaryDark,
-                          foregroundColor: Colors.white,
-                        ),
+                  ),
+                  // History Icon Button replacing Refresh and Screen Options
+                  Container(
+                    padding: EdgeInsets.only(left: 8, right: 8, top: 7.5, bottom: 5),
+                    decoration: BoxDecoration(
+                      color: Colors.white70,
+                      borderRadius: BorderRadius.circular(12)
+                    ),
+                    child: InkWell(
+                      onTap: () {
+                        _showHistoryModal(context);
+                      },
+                      child: Row(
+                        children: [
+                            Icon(Icons.history, size: 20, color: Colors.grey), SizedBox(width: 10),
+                            Text("Blog History", style: GoogleFonts.plusJakartaSans(fontSize: 15.8, fontWeight: FontWeight.bold, color: Colors.blue))
+                        ],
                       ),
-                  ],
-                ),
-              ],
-            ),
-            const SizedBox(height: 20),
-
-            Container(
-              padding: const EdgeInsets.all(20),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: Colors.grey.shade200),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withOpacity(0.03),
-                    blurRadius: 15,
-                    offset: const Offset(0, 5),
+                    ),
                   ),
                 ],
               ),
-              child: Form(
-                key: _formKey,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    ValueListenableBuilder<DateTime>(
-                      valueListenable: _liveTimeNotifier,
-                      builder: (context, time, _) {
-                        final formattedDate = DateFormat('dd MMM yyyy, hh:mm:ss a').format(time);
-                        return Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                          decoration: BoxDecoration(
-                            color: AdminTheme.primaryDark.withOpacity(0.05),
-                            borderRadius: BorderRadius.circular(10),
-                            border: Border.all(
-                              color: AdminTheme.primaryDark.withOpacity(0.15),
-                            ),
-                          ),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              const Icon(
-                                Icons.access_time_filled_rounded,
-                                size: 16,
-                                color: AdminTheme.primaryDark,
-                              ),
-                              const SizedBox(width: 8),
-                              Text(
-                                "Date & Time: $formattedDate",
-                                style: GoogleFonts.plusJakartaSans(
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.bold,
-                                  color: AdminTheme.primaryDark,
-                                ),
-                              ),
-                            ],
-                          ),
-                        );
-                      },
-                    ),
-                    const SizedBox(height: 18),
+              const SizedBox(height: 15),
 
-                    LayoutBuilder(
-                      builder: (context, constraints) {
-                        bool isMobile = constraints.maxWidth < 600;
-                        return Flex(
-                          direction: isMobile ? Axis.vertical : Axis.horizontal,
+              // Responsive Workspace Layout
+              LayoutBuilder(
+                builder: (context, constraints) {
+                  bool isDesktop = constraints.maxWidth > 900;
+                  return Flex(
+                    direction: isDesktop ? Axis.horizontal : Axis.vertical,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // LEFT COLUMN: Title & Quill Rich Text Editor Panel
+                      Expanded(
+                        flex: isDesktop ? 3 : 0,
+                        child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Expanded(
-                              flex: isMobile ? 0 : 1,
-                              child: _buildTextField(
-                                controller: _titleController,
-                                label: "Blog Title (Main Subject)",
-                                hint: "e.g., Scaling Flutter Admin Apps",
-                                validator: (val) => val == null || val.trim().isEmpty ? "Title is required" : null,
+                            // 1. Post Title Box
+                            TextFormField(
+                              controller: _titleController,
+                              style: _getFormattedTextStyle().copyWith(fontSize: 18, fontWeight: FontWeight.normal),
+                              validator: (val) => val == null || val.trim().isEmpty ? "Title is required" : null,
+                              decoration: InputDecoration(
+                                hintText: "Add title (e.g., 1. Plain Khakhra Title)",
+                                hintStyle: const TextStyle(fontSize: 18, color: Colors.grey),
+                                filled: true,
+                                fillColor: Colors.white,
+                                contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                                border: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(2),
+                                  borderSide: const BorderSide(color: Color(0xFFDDDDDD)),
+                                ),
+                                enabledBorder: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(2),
+                                  borderSide: const BorderSide(color: Color(0xFFDDDDDD)),
+                                ),
                               ),
                             ),
-                            SizedBox(width: isMobile ? 0 : 16, height: isMobile ? 12 : 0),
-                            Expanded(
-                              flex: isMobile ? 0 : 1,
-                              child: _buildTextField(
-                                controller: _subjectController,
-                                label: "Blog Subject",
-                                hint: "e.g., Software Development Journey",
-                                validator: (val) => val == null || val.trim().isEmpty ? "Subject is required" : null,
+                            const SizedBox(height: 15),
+
+                            // Media Picker Trigger
+                            Row(
+                              children: [
+                                OutlinedButton.icon(
+                                  onPressed: _pickImages,
+                                  icon: const Icon(Icons.perm_media, size: 16, color: Color(0xFF555555)),
+                                  label: const Text("Add Media", style: TextStyle(color: Color(0xFF555555), fontSize: 13)),
+                                  style: OutlinedButton.styleFrom(
+                                    backgroundColor: const Color(0xFFF7F7F7),
+                                    side: const BorderSide(color: Color(0xFFCCCCCC)),
+                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(3)),
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 8),
+
+                            // 2 & 3. Custom Classic Toolbar + MS Word Font Controls + Quill Text Editor
+                            Localizations(
+                              locale: const Locale('en', 'US'),
+                              delegates: const [
+                                quill.FlutterQuillLocalizations.delegate,
+                                GlobalMaterialLocalizations.delegate,
+                                GlobalWidgetsLocalizations.delegate,
+                              ],
+                              child: Container(
+                                decoration: BoxDecoration(
+                                  color: Colors.white,
+                                  border: Border.all(color: const Color(0xFFCCCCCC)),
+                                  borderRadius: BorderRadius.circular(3),
+                                ),
+                                child: Column(
+                                  children: [
+                                    // MS Word-style Toolbar with Font Family & Font Size Dropdowns
+                                    Container(
+                                      color: const Color(0xFFF5F5F5),
+                                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                      child: Scrollbar(
+                                        controller: _toolbarScrollController,
+                                        thumbVisibility: true,
+                                        trackVisibility: true,
+                                        thickness: 6.0,
+                                        radius: const Radius.circular(3),
+                                        child: SingleChildScrollView(
+                                          controller: _toolbarScrollController,
+                                          scrollDirection: Axis.horizontal,
+                                          padding: const EdgeInsets.only(bottom: 6),
+                                          child: Row(
+                                            children: [
+                                              // MS Word Font Family Dropdown
+                                              Container(
+                                                height: 32,
+                                                padding: const EdgeInsets.symmetric(horizontal: 8),
+                                                decoration: BoxDecoration(
+                                                  color: Colors.white,
+                                                  border: Border.all(color: Colors.grey.shade400),
+                                                  borderRadius: BorderRadius.circular(3),
+                                                ),
+                                                child: DropdownButtonHideUnderline(
+                                                  child: DropdownButton<String>(
+                                                    value: _selectedFontFamily,
+                                                    isDense: true,
+                                                    icon: const Icon(Icons.arrow_drop_down, size: 18),
+                                                    style: const TextStyle(fontSize: 13, color: Colors.black87),
+                                                    onChanged: (String? newFont) {
+                                                      if (newFont != null) {
+                                                        setState(() {
+                                                          _selectedFontFamily = newFont;
+                                                        });
+                                                      }
+                                                    },
+                                                    items: _googleFontMap.keys.map<DropdownMenuItem<String>>((String font) {
+                                                      final fontStyleFunc = _googleFontMap[font]!;
+                                                      return DropdownMenuItem<String>(
+                                                        value: font,
+                                                        child: Text(
+                                                          font,
+                                                          style: fontStyleFunc(textStyle: const TextStyle(fontSize: 13)),
+                                                        ),
+                                                      );
+                                                    }).toList(),
+                                                  ),
+                                                ),
+                                              ),
+                                              const SizedBox(width: 6),
+
+                                              // MS Word Font Size Dropdown
+                                              Container(
+                                                height: 32,
+                                                padding: const EdgeInsets.symmetric(horizontal: 8),
+                                                decoration: BoxDecoration(
+                                                  color: Colors.white,
+                                                  border: Border.all(color: Colors.grey.shade400),
+                                                  borderRadius: BorderRadius.circular(3),
+                                                ),
+                                                child: DropdownButtonHideUnderline(
+                                                  child: DropdownButton<double>(
+                                                    value: _selectedFontSize,
+                                                    isDense: true,
+                                                    icon: const Icon(Icons.arrow_drop_down, size: 18),
+                                                    style: const TextStyle(fontSize: 13, color: Colors.black87),
+                                                    onChanged: (double? newSize) {
+                                                      if (newSize != null) {
+                                                        setState(() {
+                                                          _selectedFontSize = newSize;
+                                                        });
+                                                      }
+                                                    },
+                                                    items: _fontSizeOptions.map<DropdownMenuItem<double>>((double size) {
+                                                      return DropdownMenuItem<double>(
+                                                        value: size,
+                                                        child: Text("${size.toInt()} pt"),
+                                                      );
+                                                    }).toList(),
+                                                  ),
+                                                ),
+                                              ),
+                                              const SizedBox(width: 8),
+                                              const SizedBox(height: 20, child: VerticalDivider(width: 1, color: Colors.grey)),
+
+                                              // Quill Default Formatting Controls
+                                              quill.QuillSimpleToolbar(
+                                                controller: _quillController,
+                                                config: const quill.QuillSimpleToolbarConfig(
+                                                  showFontFamily: false,
+                                                  showFontSize: false,
+                                                  showColorButton: false,
+                                                  showBackgroundColorButton: false,
+                                                  showSearchButton: false,
+                                                  showSubscript: false,
+                                                  showSuperscript: false,
+                                                  showCodeBlock: false,
+                                                  showInlineCode: false,
+                                                  showStrikeThrough: false,
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                    const Divider(height: 1, color: Color(0xFFCCCCCC)),
+
+                                    // Quill Canvas Editor Area with Selected GoogleFont Style Applied
+                                    Container(
+                                      height: 300,
+                                      padding: const EdgeInsets.all(12),
+                                      child: DefaultTextStyle(
+                                        style: _getFormattedTextStyle(),
+                                        child: quill.QuillEditor(
+                                          controller: _quillController,
+                                          focusNode: _editorFocusNode,
+                                          scrollController: _editorScrollController,
+                                          config: quill.QuillEditorConfig(
+                                            placeholder: 'Write your description, e.g., details about Plain Khakhra...',
+                                            padding: EdgeInsets.zero,
+                                            autoFocus: false,
+                                            expands: true,
+                                            customStyles: quill.DefaultStyles(
+                                              paragraph: quill.DefaultTextBlockStyle(
+                                                _getFormattedTextStyle(),
+                                                const quill.HorizontalSpacing(0, 0),
+                                                const quill.VerticalSpacing(0, 0),
+                                                const quill.VerticalSpacing(0, 0),
+                                                null,
+                                              ),
+                                            ),
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+
+                                    // Footer Word Count Bar
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                                      color: const Color(0xFFF5F5F5),
+                                      child: AnimatedBuilder(
+                                        animation: _quillController,
+                                        builder: (context, _) {
+                                          final text = _getQuillPlainText();
+                                          final count = text.isEmpty ? 0 : text.split(RegExp(r'\s+')).length;
+                                          return Row(
+                                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                            children: [
+                                              Text(
+                                                "Word count: $count",
+                                                style: const TextStyle(fontSize: 12, color: Color(0xFF666666)),
+                                              ),
+                                              Text(
+                                                "Font: $_selectedFontFamily (${_selectedFontSize.toInt()}pt)",
+                                                style: const TextStyle(fontSize: 11, color: Color(0xFF888888)),
+                                              ),
+                                            ],
+                                          );
+                                        },
+                                      ),
+                                    ),
+                                  ],
+                                ),
                               ),
                             ),
                           ],
-                        );
-                      },
-                    ),
-                    const SizedBox(height: 14),
-
-                    _buildTextField(
-                      controller: _authorController,
-                      label: "Author Name",
-                      hint: "e.g., Author Name",
-                      validator: (val) => val == null || val.trim().isEmpty ? "Author name is required" : null,
-                    ),
-                    const SizedBox(height: 14),
-
-                    _buildMediaPicker(),
-                    const SizedBox(height: 16),
-
-                    _buildTextField(
-                      controller: _descriptionController,
-                      label: "Blog Description",
-                      hint: "Write detailed content here...",
-                      maxLines: 4,
-                      validator: (val) => val == null || val.trim().isEmpty ? "Description is required" : null,
-                    ),
-                    const SizedBox(height: 16),
-
-                    Wrap(
-                      alignment: WrapAlignment.end,
-                      crossAxisAlignment: WrapCrossAlignment.center,
-                      spacing: 12,
-                      runSpacing: 12,
-                      children: [
-                        OutlinedButton.icon(
-                          onPressed: _isSaving ? null : () => _saveBlog('Draft'),
-                          icon: _isSaving
-                              ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
-                              : const Icon(Icons.drafts_outlined, size: 18),
-                          label: const Text("Save as Draft"),
-                          style: OutlinedButton.styleFrom(
-                            foregroundColor: AdminTheme.primaryDark,
-                            side: const BorderSide(color: AdminTheme.primaryDark),
-                            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                          ),
-                        ),
-                        ElevatedButton.icon(
-                          onPressed: _isSaving ? null : () => _saveBlog('Published'),
-                          icon: _isSaving
-                              ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
-                              : const Icon(Icons.publish_rounded, size: 18),
-                          label: Text(_editingBlog != null ? "Update & Publish" : "Publish Blog"),
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: AdminTheme.primaryAccent,
-                            foregroundColor: AdminTheme.primaryDark,
-                            elevation: 0,
-                            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-            ),
-            const SizedBox(height: 30),
-
-            if (draftBlogs.isNotEmpty) ...[
-              Row(
-                children: [
-                  Icon(Icons.edit_note_rounded, color: Colors.amber.shade900, size: 22),
-                  const SizedBox(width: 8),
-                  Text(
-                    "Drafted Blogs (${draftBlogs.length})",
-                    style: GoogleFonts.aleo(
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                      color: AdminTheme.primaryDark,
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 14),
-              ListView.builder(
-                shrinkWrap: true,
-                physics: const NeverScrollableScrollPhysics(),
-                itemCount: draftBlogs.length,
-                itemBuilder: (context, index) {
-                  return _buildSummaryCard(draftBlogs[index]);
-                },
-              ),
-              const SizedBox(height: 24),
-            ],
-
-            Text(
-              "Published Blogs (${publishedBlogs.length})",
-              style: GoogleFonts.aleo(
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
-                color: AdminTheme.primaryDark,
-              ),
-            ),
-            const SizedBox(height: 14),
-
-            _isLoading
-                ? const Center(child: CircularProgressIndicator(color: AdminTheme.primaryAccent))
-                : publishedBlogs.isEmpty
-                ? Container(
-              padding: const EdgeInsets.all(30),
-              width: double.infinity,
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: Colors.grey.shade200),
-              ),
-              child: Center(
-                child: Text(
-                  "No published blogs yet.",
-                  style: GoogleFonts.plusJakartaSans(color: Colors.grey.shade600),
-                ),
-              ),
-            )
-                : ListView.builder(
-              shrinkWrap: true,
-              physics: const NeverScrollableScrollPhysics(),
-              itemCount: publishedBlogs.length,
-              itemBuilder: (context, index) {
-                return _buildSummaryCard(publishedBlogs[index]);
-              },
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildTextField({
-    required TextEditingController controller,
-    required String label,
-    required String hint,
-    int maxLines = 1,
-    String? Function(String?)? validator,
-  }) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          label,
-          style: GoogleFonts.plusJakartaSans(
-            fontSize: 13,
-            fontWeight: FontWeight.bold,
-            color: AdminTheme.primaryDark,
-          ),
-        ),
-        const SizedBox(height: 6),
-        TextFormField(
-          controller: controller,
-          maxLines: maxLines,
-          style: GoogleFonts.plusJakartaSans(fontSize: 13),
-          validator: validator,
-          decoration: InputDecoration(
-            hintText: hint,
-            hintStyle: GoogleFonts.plusJakartaSans(fontSize: 13, color: Colors.grey.shade400),
-            filled: true,
-            fillColor: const Color(0xFFFAF9F6),
-            contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-            border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide(color: Colors.grey.shade300)),
-            enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide(color: Colors.grey.shade300)),
-            focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: AdminTheme.primaryAccent, width: 1.5)),
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildMediaPicker() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          "Blog Images (${_selectedPhotos.length})",
-          style: GoogleFonts.plusJakartaSans(
-            fontSize: 13,
-            fontWeight: FontWeight.bold,
-            color: AdminTheme.primaryDark,
-          ),
-        ),
-        const SizedBox(height: 10),
-
-        if (_selectedPhotos.isNotEmpty)
-          Container(
-            height: 100,
-            padding: const EdgeInsets.symmetric(vertical: 8),
-            child: ListView.builder(
-              scrollDirection: Axis.horizontal,
-              itemCount: _selectedPhotos.length,
-              itemBuilder: (context, index) {
-                return Container(
-                  width: 100,
-                  margin: const EdgeInsets.only(right: 8),
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(8),
-                    border: Border.all(color: Colors.grey.shade300),
-                  ),
-                  child: Stack(
-                    children: [
-                      ClipRRect(
-                        borderRadius: BorderRadius.circular(8),
-                        child: buildUniversalImage(
-                          _selectedPhotos[index],
-                          fit: BoxFit.cover,
-                          width: 100,
-                          height: 100,
                         ),
                       ),
-                      Positioned(
-                        top: 4,
-                        right: 4,
-                        child: GestureDetector(
-                          onTap: () {
-                            setState(() {
-                              _selectedPhotos.removeAt(index);
-                            });
-                          },
-                          child: Container(
-                            padding: const EdgeInsets.all(2),
-                            decoration: const BoxDecoration(
-                              color: Colors.redAccent,
-                              shape: BoxShape.circle,
+
+                      if (isDesktop) const SizedBox(width: 20) else const SizedBox(height: 20),
+
+                      // RIGHT COLUMN: Sidebar Panes
+                      Expanded(
+                        flex: isDesktop ? 1 : 0,
+                        child: Column(
+                          children: [
+                            // Publish Box
+                            _buildSidebarBox(
+                              title: "Publish",
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Row(
+                                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                    children: [
+                                      OutlinedButton(
+                                        onPressed: _isSaving ? null : () => _saveBlog('Draft'),
+                                        style: OutlinedButton.styleFrom(
+                                          backgroundColor: const Color(0xFFF7F7F7),
+                                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                                          side: const BorderSide(color: Color(0xFFCCCCCC)),
+                                        ),
+                                        child: const Text("Save Draft", style: TextStyle(color: Color(0xFF555555), fontSize: 12)),
+                                      ),
+                                      OutlinedButton(
+                                        onPressed: _editingBlog != null ? _resetForm : null,
+                                        style: OutlinedButton.styleFrom(
+                                          backgroundColor: const Color(0xFFF7F7F7),
+                                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                                          side: const BorderSide(color: Color(0xFFCCCCCC)),
+                                        ),
+                                        child: const Text("Reset Form", style: TextStyle(color: Color(0xFF555555), fontSize: 12)),
+                                      ),
+                                    ],
+                                  ),
+                                  const SizedBox(height: 12),
+                                  Row(
+                                    children: [
+                                      const Icon(Icons.key, size: 16, color: Color(0xFF666666)),
+                                      const SizedBox(width: 6),
+                                      Text(
+                                        "Status: ${_editingBlog?.status ?? 'Draft'}",
+                                        style: const TextStyle(fontSize: 13, color: Color(0xFF444444)),
+                                      ),
+                                    ],
+                                  ),
+                                  const SizedBox(height: 8),
+                                  ValueListenableBuilder<DateTime>(
+                                    valueListenable: _liveTimeNotifier,
+                                    builder: (context, time, _) {
+                                      final formattedDate = DateFormat('MMM dd, yyyy @ HH:mm').format(time);
+                                      return Row(
+                                        children: [
+                                          const Icon(Icons.calendar_today, size: 16, color: Color(0xFF666666)),
+                                          const SizedBox(width: 6),
+                                          Expanded(
+                                            child: Text(
+                                              "Publish: $formattedDate",
+                                              style: const TextStyle(fontSize: 12, color: Color(0xFF444444)),
+                                            ),
+                                          ),
+                                        ],
+                                      );
+                                    },
+                                  ),
+                                  const Divider(height: 20),
+                                  Container(
+                                    color: const Color(0xFFF5F5F5),
+                                    padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 8),
+                                    child: Row(
+                                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                      children: [
+                                        if (_editingBlog != null)
+                                          GestureDetector(
+                                            onTap: () => _deleteBlog(_editingBlog!.id),
+                                            child: const Text("Move to Trash", style: TextStyle(color: Colors.red, fontSize: 12, decoration: TextDecoration.underline)),
+                                          )
+                                        else
+                                          const SizedBox.shrink(),
+                                        ElevatedButton(
+                                          onPressed: _isSaving ? null : () => _saveBlog('Published'),
+                                          style: ElevatedButton.styleFrom(
+                                            backgroundColor: const Color(0xFF0073AA),
+                                            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(3)),
+                                          ),
+                                          child: Text(
+                                            _editingBlog != null ? "Update" : "Publish",
+                                            style: const TextStyle(color: Colors.white, fontSize: 13),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ],
+                              ),
                             ),
-                            child: const Icon(Icons.close, size: 16, color: Colors.white),
-                          ),
+                            const SizedBox(height: 16),
+
+                            // Post Details Box
+                            _buildSidebarBox(
+                              title: "Post Details",
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  TextFormField(
+                                    controller: _subjectController,
+                                    validator: (val) => val == null || val.trim().isEmpty ? "Subject is required" : null,
+                                    decoration: const InputDecoration(
+                                      labelText: "Category / Subject",
+                                      isDense: true,
+                                      border: OutlineInputBorder(),
+                                    ),
+                                  ),
+                                  const SizedBox(height: 10),
+                                  TextFormField(
+                                    controller: _authorController,
+                                    validator: (val) => val == null || val.trim().isEmpty ? "Author is required" : null,
+                                    decoration: const InputDecoration(
+                                      labelText: "Author Name",
+                                      isDense: true,
+                                      border: OutlineInputBorder(),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            const SizedBox(height: 16),
+
+                            // Image Sidebar Box
+                            _buildSidebarBox(
+                              title: "Featured Images",
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  if (_selectedPhotos.isNotEmpty)
+                                    SizedBox(
+                                      height: 90,
+                                      child: ListView.builder(
+                                        scrollDirection: Axis.horizontal,
+                                        itemCount: _selectedPhotos.length,
+                                        itemBuilder: (context, idx) {
+                                          return Stack(
+                                            children: [
+                                              Container(
+                                                width: 80,
+                                                margin: const EdgeInsets.only(right: 8),
+                                                decoration: BoxDecoration(border: Border.all(color: Colors.grey.shade300)),
+                                                child: buildUniversalImage(_selectedPhotos[idx], fit: BoxFit.cover),
+                                              ),
+                                              Positioned(
+                                                top: 2,
+                                                right: 10,
+                                                child: GestureDetector(
+                                                  onTap: () {
+                                                    setState(() {
+                                                      _selectedPhotos.removeAt(idx);
+                                                    });
+                                                  },
+                                                  child: const CircleAvatar(
+                                                    radius: 10,
+                                                    backgroundColor: Colors.red,
+                                                    child: Icon(Icons.close, size: 12, color: Colors.white),
+                                                  ),
+                                                ),
+                                              ),
+                                            ],
+                                          );
+                                        },
+                                      ),
+                                    ),
+                                  const SizedBox(height: 8),
+                                  Row(
+                                    children: [
+                                      Expanded(
+                                        child: TextField(
+                                          controller: _webUrlController,
+                                          style: const TextStyle(fontSize: 12),
+                                          decoration: const InputDecoration(
+                                            hintText: "Add Image URL",
+                                            isDense: true,
+                                            contentPadding: EdgeInsets.all(8),
+                                            border: OutlineInputBorder(),
+                                          ),
+                                        ),
+                                      ),
+                                      IconButton(
+                                        icon: const Icon(Icons.add_link, color: Color(0xFF0073AA)),
+                                        onPressed: () {
+                                          if (_webUrlController.text.trim().isNotEmpty) {
+                                            setState(() {
+                                              _selectedPhotos.add(MediaItem(url: _webUrlController.text.trim()));
+                                              _webUrlController.clear();
+                                            });
+                                          }
+                                        },
+                                      )
+                                    ],
+                                  ),
+                                  const SizedBox(height: 6),
+                                  GestureDetector(
+                                    onTap: _pickImages,
+                                    child: const Text(
+                                      "Set featured image",
+                                      style: TextStyle(color: Color(0xFF0073AA), fontSize: 13, decoration: TextDecoration.underline),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
                         ),
                       ),
                     ],
-                  ),
-                );
-              },
-            ),
+                  );
+                },
+              ),
+              const SizedBox(height: 30),
+            ],
           ),
-
-        Row(
-          children: [
-            ElevatedButton.icon(
-              onPressed: _pickImages,
-              icon: const Icon(Icons.image, size: 18),
-              label: const Text("Pick Images"),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.grey.shade200,
-                foregroundColor: AdminTheme.primaryDark,
-                elevation: 0,
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-              ),
-            ),
-            const SizedBox(width: 10),
-            Expanded(
-              child: Row(
-                children: [
-                  Expanded(
-                    child: TextFormField(
-                      controller: _webUrlController,
-                      decoration: InputDecoration(
-                        hintText: "Enter image URL",
-                        hintStyle: GoogleFonts.plusJakartaSans(fontSize: 12, color: Colors.grey.shade400),
-                        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide(color: Colors.grey.shade300)),
-                        enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide(color: Colors.grey.shade300)),
-                        focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: AdminTheme.primaryAccent)),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  IconButton(
-                    onPressed: () {
-                      if (_webUrlController.text.trim().isNotEmpty) {
-                        setState(() {
-                          _selectedPhotos.add(MediaItem(url: _webUrlController.text.trim()));
-                          _webUrlController.clear();
-                        });
-                      }
-                    },
-                    icon: const Icon(Icons.add_circle, color: AdminTheme.primaryAccent),
-                  ),
-                ],
-              ),
-            ),
-          ],
         ),
-      ],
+      ),
     );
   }
 
-  Widget _buildSummaryCard(BlogItem blog) {
-    final isPublished = blog.status == 'Published';
-    final PageController carouselController = PageController();
-
+  Widget _buildSidebarBox({required String title, required Widget child}) {
     return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      padding: const EdgeInsets.all(14),
+      width: double.infinity,
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: Colors.grey.shade200),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.02),
-            blurRadius: 10,
-            offset: const Offset(0, 4),
-          ),
-        ],
+        border: Border.all(color: const Color(0xFFCCCCCC)),
+        borderRadius: BorderRadius.circular(2),
       ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.center,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Container(
-            width: 80,
-            height: 80,
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(10),
-              color: Colors.grey.shade100,
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            decoration: const BoxDecoration(
+              border: Border(bottom: BorderSide(color: Color(0xFFEEEEEE))),
             ),
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(10),
-              child: blog.photos.isNotEmpty
-                  ? PageView.builder(
-                controller: carouselController,
-                itemCount: blog.photos.length,
-                itemBuilder: (context, idx) {
-                  return buildUniversalImage(
-                    MediaItem(url: blog.photos[idx]),
-                    fit: BoxFit.cover,
-                  );
-                },
-              )
-                  : const Icon(Icons.article_outlined, color: Colors.grey, size: 28),
-            ),
-          ),
-          const SizedBox(width: 14),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Row(
-                  children: [
-                    Expanded(
-                      child: Text(
-                        blog.title,
-                        style: GoogleFonts.plusJakartaSans(
-                          fontWeight: FontWeight.bold,
-                          fontSize: 14,
-                          color: AdminTheme.primaryDark,
-                        ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ),
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                      decoration: BoxDecoration(
-                        color: isPublished ? Colors.green.shade50 : Colors.amber.shade50,
-                        borderRadius: BorderRadius.circular(6),
-                        border: Border.all(
-                          color: isPublished ? Colors.green.shade300 : Colors.amber.shade300,
-                        ),
-                      ),
-                      child: Text(
-                        blog.status,
-                        style: GoogleFonts.plusJakartaSans(
-                          fontSize: 10,
-                          fontWeight: FontWeight.bold,
-                          color: isPublished ? Colors.green.shade800 : Colors.amber.shade900,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 4),
                 Text(
-                  "By ${blog.authorName.split(RegExp(r'https?://')).first.trim()} • ${blog.photos.length} image(s)",
-                  style: GoogleFonts.plusJakartaSans(fontSize: 12, color: Colors.grey.shade600),
+                  title,
+                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Color(0xFF23282D)),
                 ),
+                const Icon(Icons.keyboard_arrow_up, size: 18, color: Color(0xFF666666)),
               ],
             ),
           ),
-          Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              IconButton(
-                icon: const Icon(Icons.edit_outlined, color: AdminTheme.primaryDark),
-                onPressed: () => _editBlog(blog),
-              ),
-              IconButton(
-                icon: const Icon(Icons.delete_outline_rounded, color: Colors.redAccent),
-                onPressed: () => _deleteBlog(blog.id),
-              ),
-            ],
+          Padding(
+            padding: const EdgeInsets.all(12.0),
+            child: child,
           ),
         ],
       ),
