@@ -5,11 +5,22 @@ import 'package:http/http.dart' as http;
 import 'package:http_parser/http_parser.dart';
 import 'package:bindu_decor_admin/Helper_class.dart';
 
+enum Environment { local, userWeb, adminWeb }
+
 class OperationsApi {
   // ⚠️ CHANGE THIS TO YOUR ACTUAL SERVER URL
-  static const String baseUrl = 'https://yellow-woodpecker-430323.hostingersite.com/bindu_web/'
-      'http://192.168.1.48/bindu_decor/'
-      'https://yellow-woodpecker-430323.hostingersite.com/bindu_admin_web/';
+  static const Environment currentEnv = Environment.userWeb;
+
+  static String get baseUrl {
+    switch (currentEnv) {
+      case Environment.local:
+        return 'http://192.168.1.48/bindu_decor/';
+      case Environment.userWeb:
+        return 'https://yellow-woodpecker-430323.hostingersite.com/bindu_web/';
+      case Environment.adminWeb:
+        return 'https://yellow-woodpecker-430323.hostingersite.com/bindu_admin_web/';
+    }
+  }
 
   // ==========================================
   // IMAGE URL RESOLUTION — routed through image.php

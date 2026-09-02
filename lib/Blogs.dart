@@ -11,6 +11,8 @@ import 'package:image_picker/image_picker.dart';
 import 'AdminDashboard.dart';
 import 'Helper_class.dart';
 
+enum Environment { local, userWeb, adminWeb }
+
 class BlogDataStore {
   static final List<BlogItem> blogs = [];
 }
@@ -27,9 +29,18 @@ class Blogs extends StatefulWidget {
 class _BlogsState extends State<Blogs> with AutomaticKeepAliveClientMixin {
   final _formKey = GlobalKey<FormState>();
 
-  final String _apiEndpoint = 'https://yellow-woodpecker-430323.hostingersite.com/bindu_web/blogs.php'
-      'http://192.168.1.48/bindu_decor/blogs.php'
-      'https://yellow-woodpecker-430323.hostingersite.com/bindu_admin_web/blogs.php';
+  static const Environment currentEnv = Environment.userWeb;
+
+  static String get baseUrl {
+    switch (currentEnv) {
+      case Environment.local:
+        return 'http://192.168.1.48/bindu_decor/blogs.php';
+      case Environment.userWeb:
+        return 'https://yellow-woodpecker-430323.hostingersite.com/bindu_web/blogs.php';
+      case Environment.adminWeb:
+        return 'https://yellow-woodpecker-430323.hostingersite.com/bindu_admin_web/blogs.php';
+    }
+  }
 
   final TextEditingController _titleController = TextEditingController();
   final TextEditingController _subjectController = TextEditingController();
@@ -132,7 +143,7 @@ class _BlogsState extends State<Blogs> with AutomaticKeepAliveClientMixin {
     if (mounted) setState(() => _isLoading = true);
 
     try {
-      final response = await http.get(Uri.parse(_apiEndpoint));
+      final response = await http.get(Uri.parse(baseUrl));
       if (response.statusCode == 200) {
         final resData = jsonDecode(response.body);
         if (resData['status'] == 'success' && resData['data'] != null) {
@@ -199,7 +210,7 @@ class _BlogsState extends State<Blogs> with AutomaticKeepAliveClientMixin {
     setState(() => _isSaving = true);
 
     try {
-      final uri = Uri.parse(_apiEndpoint);
+      final uri = Uri.parse(baseUrl);
       final request = http.MultipartRequest('POST', uri);
 
       request.fields['title'] = _titleController.text.trim();
@@ -281,7 +292,7 @@ class _BlogsState extends State<Blogs> with AutomaticKeepAliveClientMixin {
 
   Future<void> _deleteBlog(String id) async {
     try {
-      final response = await http.delete(Uri.parse("$_apiEndpoint?id=$id"));
+      final response = await http.delete(Uri.parse("$baseUrl?id=$id"));
       if (response.statusCode == 200) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
