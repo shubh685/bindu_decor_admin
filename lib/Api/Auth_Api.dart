@@ -7,8 +7,9 @@ class Api {
   // CHANGE THIS TO YOUR LIVE HOSTINGER URL
   // =====================================================
 
-  static const String baseUrl =
-      "http://192.168.1.48/bindu_decor/";
+  static const String baseUrl = 'https://yellow-woodpecker-430323.hostingersite.com/bindu_web/'
+      'http://192.168.1.48/bindu_decor/'
+      'https://yellow-woodpecker-430323.hostingersite.com/bindu_admin_web/';
 
   // =====================================================
   // LOGIN

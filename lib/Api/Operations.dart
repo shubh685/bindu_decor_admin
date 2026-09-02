@@ -7,7 +7,9 @@ import 'package:bindu_decor_admin/Helper_class.dart';
 
 class OperationsApi {
   // ⚠️ CHANGE THIS TO YOUR ACTUAL SERVER URL
-  static const String baseUrl = 'http://192.168.1.48/bindu_decor/';
+  static const String baseUrl = 'https://yellow-woodpecker-430323.hostingersite.com/bindu_web/'
+      'http://192.168.1.48/bindu_decor/'
+      'https://yellow-woodpecker-430323.hostingersite.com/bindu_admin_web/';
 
   // ==========================================
   // IMAGE URL RESOLUTION — routed through image.php

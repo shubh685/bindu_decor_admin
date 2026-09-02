@@ -27,7 +27,9 @@ class Blogs extends StatefulWidget {
 class _BlogsState extends State<Blogs> with AutomaticKeepAliveClientMixin {
   final _formKey = GlobalKey<FormState>();
 
-  final String _apiEndpoint = "http://192.168.1.48/bindu_decor/blogs.php";
+  final String _apiEndpoint = 'https://yellow-woodpecker-430323.hostingersite.com/bindu_web/blogs.php'
+      'http://192.168.1.48/bindu_decor/blogs.php'
+      'https://yellow-woodpecker-430323.hostingersite.com/bindu_admin_web/blogs.php';
 
   final TextEditingController _titleController = TextEditingController();
   final TextEditingController _subjectController = TextEditingController();

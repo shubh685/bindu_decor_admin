@@ -237,7 +237,8 @@ class _AdminDashboardState extends State<AdminDashboard> with SingleTickerProvid
 
   Future<void> _loadBlogs() async {
     try {
-      final response = await http.get(Uri.parse("http://192.168.1.48/bindu_decor/blogs.php"));
+      final response = await http.get(Uri.parse('https://yellow-woodpecker-430323.hostingersite.com/bindu_web/blogs.php'
+          'http://192.168.1.48/bindu_decor/blogs.php'));
       if (response.statusCode == 200) {
         final resData = jsonDecode(response.body);
         if (resData['status'] == 'success' && resData['data'] != null) {
