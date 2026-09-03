@@ -1,20 +1,23 @@
-import 'dart:io';
-import 'package:bindu_decor_admin/Admin_Auth.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+
 import 'AdminDashboard.dart';
+import 'Admin_Auth.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // Set preferred orientations for supported platforms/devices
-  await SystemChrome.setPreferredOrientations([
-    DeviceOrientation.portraitUp,
-    DeviceOrientation.portraitDown,
-  ]);
+  // Set preferred orientations for supported platforms
+  if (!kIsWeb) {
+    await SystemChrome.setPreferredOrientations([
+      DeviceOrientation.portraitUp,
+      DeviceOrientation.portraitDown,
+    ]);
+  }
 
-  // Check 10-day auto login session state
+  // Check 10-day auto-login session state
   final bool isLoggedIn = await SessionManager.isSessionValid();
 
   runApp(MyApp(isLoggedIn: isLoggedIn));
@@ -34,24 +37,12 @@ class MyApp extends StatelessWidget {
         primarySwatch: Colors.green,
         scaffoldBackgroundColor: const Color(0xFFF8F9FA),
       ),
-      home: isLoggedIn ? const AdminDashboard() : AdminAuth(),
+      home: isLoggedIn ? const AdminDashboard() : const AdminAuth(),
     );
   }
 }
 
-// CRITICAL: Override all SSL/network issues
-class MyHttpOverrides extends HttpOverrides {
-  @override
-  HttpClient createHttpClient(SecurityContext? context) {
-    return super.createHttpClient(context)
-      ..connectionTimeout = const Duration(seconds: 60)
-      ..idleTimeout = const Duration(seconds: 60)
-      ..badCertificateCallback = (X509Certificate cert, String host, int port) => true;
-  }
-}
-
-// Session Manager helper handling 10-day expiration linked with login.php user response
-// Session Manager helper handling 10-day expiration linked with login.php user response
+// Session Manager handling 10-day expiration linked with login.php response
 class SessionManager {
   static const String keyIsLoggedIn = "is_logged_in";
   static const String keyLoginTimestamp = "login_timestamp";

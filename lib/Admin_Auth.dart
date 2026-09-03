@@ -29,7 +29,6 @@ class _AdminAuthState extends State<AdminAuth> {
   ResetStep _resetStep = ResetStep.enterEmail;
   bool _isLoading = false;
 
-  // Password Visibility States
   bool _obscurePassword = true;
   bool _obscureNewPassword = true;
   bool _obscureConfirmPassword = true;
@@ -50,7 +49,6 @@ class _AdminAuthState extends State<AdminAuth> {
     super.dispose();
   }
 
-  /// Helper method to retrieve local device time in MySQL DATETIME format (YYYY-MM-DD HH:mm:ss)
   String _getDeviceSyncTime() {
     final now = DateTime.now();
     return "${now.year.toString().padLeft(4, '0')}-"
@@ -107,9 +105,7 @@ class _AdminAuthState extends State<AdminAuth> {
     final String deviceTime = _getDeviceSyncTime();
 
     try {
-      // =================================================
       // SIGN IN
-      // =================================================
       if (_authMode == AuthMode.signIn) {
         final data = await Api.login(
           email: _emailController.text.trim(),
@@ -117,7 +113,6 @@ class _AdminAuthState extends State<AdminAuth> {
         );
 
         if (data['status'] == true) {
-          // Save login timestamp and user details directly via SessionManager
           final userData = Map<String, dynamic>.from(data['user'] ?? {});
           await SessionManager.saveSession(userData);
 
@@ -137,9 +132,7 @@ class _AdminAuthState extends State<AdminAuth> {
         return;
       }
 
-      // =================================================
-      // FORGOT PASSWORD - STEP 1: SEND OTP
-      // =================================================
+      // RESET PASSWORD - STEP 1: SEND OTP
       if (_resetStep == ResetStep.enterEmail) {
         final data = await Api.sendOtp(
           email: _emailController.text.trim(),
@@ -148,9 +141,7 @@ class _AdminAuthState extends State<AdminAuth> {
 
         if (data['status'] == true) {
           _showSnackBar("OTP sent to your email!");
-
           if (!mounted) return;
-
           setState(() {
             _resetStep = ResetStep.enterOtp;
           });
@@ -163,9 +154,7 @@ class _AdminAuthState extends State<AdminAuth> {
         return;
       }
 
-      // =================================================
-      // FORGOT PASSWORD - STEP 2: VERIFY OTP
-      // =================================================
+      // RESET PASSWORD - STEP 2: VERIFY OTP
       if (_resetStep == ResetStep.enterOtp) {
         final data = await Api.verifyOtp(
           email: _emailController.text.trim(),
@@ -175,9 +164,7 @@ class _AdminAuthState extends State<AdminAuth> {
 
         if (data['status'] == true) {
           _showSnackBar("OTP verified! Enter your new password.");
-
           if (!mounted) return;
-
           setState(() {
             _resetStep = ResetStep.newPassword;
           });
@@ -190,9 +177,7 @@ class _AdminAuthState extends State<AdminAuth> {
         return;
       }
 
-      // =================================================
-      // FORGOT PASSWORD - STEP 3: RESET PASSWORD
-      // =================================================
+      // RESET PASSWORD - STEP 3: NEW PASSWORD
       if (_resetStep == ResetStep.newPassword) {
         final data = await Api.resetPassword(
           email: _emailController.text.trim(),
@@ -202,7 +187,6 @@ class _AdminAuthState extends State<AdminAuth> {
 
         if (data['status'] == true) {
           _showSnackBar("Password reset successfully!");
-
           if (!mounted) return;
 
           _newPasswordController.clear();
@@ -221,7 +205,7 @@ class _AdminAuthState extends State<AdminAuth> {
     } catch (e) {
       if (!mounted) return;
       _showSnackBar(
-        "Connection error. Please check your internet/API.",
+        "Connection error. Please check your network/API.",
         isError: true,
       );
     } finally {
@@ -261,13 +245,10 @@ class _AdminAuthState extends State<AdminAuth> {
                   child: Row(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      // Left Custom Curved Sidebar Navigation Panel
                       Expanded(
                         flex: 4,
                         child: _buildLeftSidebar(),
                       ),
-
-                      // Right Main Form Panel
                       Expanded(
                         flex: 6,
                         child: Container(
@@ -276,7 +257,6 @@ class _AdminAuthState extends State<AdminAuth> {
                           child: Column(
                             mainAxisAlignment: MainAxisAlignment.center,
                             children: [
-                              // Circular Profile Icon Header
                               Container(
                                 width: 70,
                                 height: 70,
@@ -314,8 +294,6 @@ class _AdminAuthState extends State<AdminAuth> {
                                 ),
                               ),
                               const SizedBox(height: 25),
-
-                              // Dynamic Form Fields
                               if (_authMode == AuthMode.signIn || _resetStep == ResetStep.enterEmail) ...[
                                 _buildUnderlineTextField(
                                   controller: _emailController,
@@ -332,7 +310,6 @@ class _AdminAuthState extends State<AdminAuth> {
                                 ),
                                 const SizedBox(height: 20),
                               ],
-
                               if (_authMode == AuthMode.signIn) ...[
                                 _buildUnderlineTextField(
                                   controller: _passwordController,
@@ -371,7 +348,6 @@ class _AdminAuthState extends State<AdminAuth> {
                                   child: _buildSubmitButton("Sign IN"),
                                 ),
                               ],
-
                               if (_authMode == AuthMode.resetPassword && _resetStep == ResetStep.enterOtp) ...[
                                 _buildUnderlineTextField(
                                   controller: _otpController,
@@ -389,7 +365,6 @@ class _AdminAuthState extends State<AdminAuth> {
                                   child: _buildSubmitButton("VERIFY OTP"),
                                 ),
                               ],
-
                               if (_authMode == AuthMode.resetPassword && _resetStep == ResetStep.newPassword) ...[
                                 _buildUnderlineTextField(
                                   controller: _newPasswordController,
@@ -430,7 +405,6 @@ class _AdminAuthState extends State<AdminAuth> {
                                   child: _buildSubmitButton("UPDATE"),
                                 ),
                               ],
-
                               if (_authMode == AuthMode.resetPassword && _resetStep == ResetStep.enterEmail) ...[
                                 Align(
                                   alignment: Alignment.centerRight,
@@ -455,15 +429,12 @@ class _AdminAuthState extends State<AdminAuth> {
   Widget _buildLeftSidebar() {
     return Stack(
       children: [
-        // 1. Layered Backgrounds
         Container(color: LuxuryTheme.primaryDark),
         Positioned.fill(
           child: CustomPaint(
             painter: ImageBackgroundPainter(),
           ),
         ),
-
-        // 2. Active Curved Tab Indicator
         Positioned(
           top: 140,
           right: 0,
@@ -489,13 +460,10 @@ class _AdminAuthState extends State<AdminAuth> {
             ),
           ),
         ),
-
-        // 3. Responsive Content Section
         Positioned.fill(
           child: LayoutBuilder(
             builder: (context, constraints) {
               final double topPadding = constraints.maxHeight * 0.05;
-
               return SafeArea(
                 child: SingleChildScrollView(
                   physics: const ClampingScrollPhysics(),
@@ -504,7 +472,6 @@ class _AdminAuthState extends State<AdminAuth> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.center,
                       children: [
-                        // Responsive Logo Box
                         SizedBox(
                           height: 80,
                           width: 120,
@@ -522,8 +489,6 @@ class _AdminAuthState extends State<AdminAuth> {
                           ),
                         ),
                         const SizedBox(height: 16),
-
-                        // Interactive Sign In Tab Action
                         GestureDetector(
                           onTap: () => _switchAuthMode(AuthMode.signIn),
                           behavior: HitTestBehavior.opaque,
@@ -632,7 +597,6 @@ class _AdminAuthState extends State<AdminAuth> {
   }
 }
 
-// Custom Painter for Left-side Geometric Polygon Layers using Luxury Theme Colors
 class ImageBackgroundPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
@@ -666,7 +630,6 @@ class ImageBackgroundPainter extends CustomPainter {
   bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }
 
-// Custom Painter for the Smooth White Curved Tab Indicator on the Left
 class TabCurvedPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {

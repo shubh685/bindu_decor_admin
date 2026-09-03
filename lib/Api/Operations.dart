@@ -6,8 +6,8 @@ import 'package:http_parser/http_parser.dart';
 import 'package:bindu_decor_admin/Helper_class.dart';
 
 class OperationsApi {
-  // ⚠️ CHANGE THIS TO YOUR ACTUAL SERVER URL
-  static const String baseUrl = 'https://yellow-woodpecker-430323.hostingersite.com/bindu_admin_web/';
+  // ⚠️ CORRECTED BASE URL - NO TRAILING SLASH
+  static const String baseUrl = 'https://yellow-woodpecker-430323.hostingersite.com/api/bindu_admin_web';
 
   // ==========================================
   // IMAGE URL RESOLUTION — routed through image.php
@@ -46,11 +46,20 @@ class OperationsApi {
 
     if (cleanPath.isEmpty) return '';
 
-    String base = baseUrl.endsWith('/') ? baseUrl : '$baseUrl/';
-    return '${base}image.php?path=${Uri.encodeComponent(cleanPath)}';
+    return '$baseUrl/image.php?path=${Uri.encodeComponent(cleanPath)}';
   }
 
   static bool _isSuccessStatus(int status) => status == 200 || status == 201;
+
+  // ==========================================
+  // HELPER: Build URL with proper formatting
+  // ==========================================
+  static String _buildUrl(String endpoint) {
+    if (endpoint.startsWith('/')) {
+      return '$baseUrl$endpoint';
+    }
+    return '$baseUrl/$endpoint';
+  }
 
   // ==========================================
   // PRODUCT OPERATIONS
@@ -64,9 +73,11 @@ class OperationsApi {
     String? imageFileName,
   }) async {
     try {
-      final uri = Uri.parse('${baseUrl}products.php?action=add');
+      final uri = Uri.parse(_buildUrl('products.php'));
       final request = http.MultipartRequest('POST', uri);
 
+      // Add action parameter
+      request.fields['action'] = 'add';
       request.fields.addAll(fields);
 
       final List<Uint8List> bytesList = imageBytesList ??
@@ -78,12 +89,24 @@ class OperationsApi {
       final streamed = await request.send();
       final response = await http.Response.fromStream(streamed);
 
-      print('Add Product HTTP(${response.statusCode}): ${response.body}');
+      debugPrint('Add Product HTTP(${response.statusCode}): ${response.body}');
 
       if (_isSuccessStatus(response.statusCode)) {
-        return json.decode(response.body) as Map<String, dynamic>;
+        try {
+          return json.decode(response.body) as Map<String, dynamic>;
+        } catch (e) {
+          return {
+            'status': 'error',
+            'message': 'Invalid JSON response from server',
+            'raw': response.body.substring(0, 200)
+          };
+        }
       } else {
-        return {'status': 'error', 'message': 'Server error: ${response.statusCode}', 'raw': response.body};
+        return {
+          'status': 'error',
+          'message': 'Server error: ${response.statusCode}',
+          'raw': response.body.substring(0, 200)
+        };
       }
     } catch (e) {
       return {'status': 'error', 'message': 'Connection error: $e'};
@@ -98,9 +121,10 @@ class OperationsApi {
     String? imageFileName,
   }) async {
     try {
-      final uri = Uri.parse("${baseUrl}products.php?action=update");
+      final uri = Uri.parse(_buildUrl('products.php'));
       final request = http.MultipartRequest('POST', uri);
 
+      request.fields['action'] = 'update';
       request.fields.addAll(fields);
 
       final List<Uint8List> bytesList = imageBytesList ??
@@ -112,12 +136,24 @@ class OperationsApi {
       final streamedResponse = await request.send();
       final response = await http.Response.fromStream(streamedResponse);
 
-      print('Update Product HTTP(${response.statusCode}): ${response.body}');
+      debugPrint('Update Product HTTP(${response.statusCode}): ${response.body}');
 
       if (_isSuccessStatus(response.statusCode)) {
-        return json.decode(response.body) as Map<String, dynamic>;
+        try {
+          return json.decode(response.body) as Map<String, dynamic>;
+        } catch (e) {
+          return {
+            'status': 'error',
+            'message': 'Invalid JSON response from server',
+            'raw': response.body.substring(0, 200)
+          };
+        }
       } else {
-        return {'status': 'error', 'message': 'Server error: ${response.statusCode}', 'raw': response.body};
+        return {
+          'status': 'error',
+          'message': 'Server error: ${response.statusCode}',
+          'raw': response.body.substring(0, 200)
+        };
       }
     } catch (e) {
       debugPrint("OperationsApi updateProduct error: $e");
@@ -128,20 +164,24 @@ class OperationsApi {
   static Future<bool> deleteProduct(String id) async {
     try {
       final response = await http.post(
-        Uri.parse('${baseUrl}products.php?action=delete'),
+        Uri.parse(_buildUrl('products.php')),
         headers: {'Content-Type': 'application/x-www-form-urlencoded'},
-        body: {'id': id},
+        body: {'action': 'delete', 'id': id},
       );
 
-      print('Delete Product HTTP(${response.statusCode}): ${response.body}');
+      debugPrint('Delete Product HTTP(${response.statusCode}): ${response.body}');
 
       if (_isSuccessStatus(response.statusCode)) {
-        final data = json.decode(response.body);
-        return data['status'] == 'success';
+        try {
+          final data = json.decode(response.body);
+          return data['status'] == 'success';
+        } catch (e) {
+          return false;
+        }
       }
       return false;
     } catch (e) {
-      print('Error deleting product: $e');
+      debugPrint('Error deleting product: $e');
       return false;
     }
   }
@@ -158,9 +198,10 @@ class OperationsApi {
     String? imageFileName,
   }) async {
     try {
-      final uri = Uri.parse('${baseUrl}projects.php?action=add');
+      final uri = Uri.parse(_buildUrl('projects.php'));
       final request = http.MultipartRequest('POST', uri);
 
+      request.fields['action'] = 'add';
       request.fields.addAll(fields);
 
       final List<Uint8List> bytesList = imageBytesList ??
@@ -172,12 +213,24 @@ class OperationsApi {
       final streamed = await request.send();
       final response = await http.Response.fromStream(streamed);
 
-      print('Add Project HTTP(${response.statusCode}): ${response.body}');
+      debugPrint('Add Project HTTP(${response.statusCode}): ${response.body}');
 
       if (_isSuccessStatus(response.statusCode)) {
-        return json.decode(response.body) as Map<String, dynamic>;
+        try {
+          return json.decode(response.body) as Map<String, dynamic>;
+        } catch (e) {
+          return {
+            'status': 'error',
+            'message': 'Invalid JSON response from server',
+            'raw': response.body.substring(0, 200)
+          };
+        }
       } else {
-        return {'status': 'error', 'message': 'Server error: ${response.statusCode}', 'raw': response.body};
+        return {
+          'status': 'error',
+          'message': 'Server error: ${response.statusCode}',
+          'raw': response.body.substring(0, 200)
+        };
       }
     } catch (e) {
       return {'status': 'error', 'message': 'Connection error: $e'};
@@ -192,9 +245,10 @@ class OperationsApi {
     String? imageFileName,
   }) async {
     try {
-      final uri = Uri.parse('${baseUrl}projects.php?action=update');
+      final uri = Uri.parse(_buildUrl('projects.php'));
       final request = http.MultipartRequest('POST', uri);
 
+      request.fields['action'] = 'update';
       request.fields.addAll(fields);
 
       final List<Uint8List> bytesList = imageBytesList ??
@@ -206,12 +260,24 @@ class OperationsApi {
       final streamed = await request.send();
       final response = await http.Response.fromStream(streamed);
 
-      print('Update Project HTTP(${response.statusCode}): ${response.body}');
+      debugPrint('Update Project HTTP(${response.statusCode}): ${response.body}');
 
       if (_isSuccessStatus(response.statusCode)) {
-        return json.decode(response.body) as Map<String, dynamic>;
+        try {
+          return json.decode(response.body) as Map<String, dynamic>;
+        } catch (e) {
+          return {
+            'status': 'error',
+            'message': 'Invalid JSON response from server',
+            'raw': response.body.substring(0, 200)
+          };
+        }
       } else {
-        return {'status': 'error', 'message': 'Server error: ${response.statusCode}', 'raw': response.body};
+        return {
+          'status': 'error',
+          'message': 'Server error: ${response.statusCode}',
+          'raw': response.body.substring(0, 200)
+        };
       }
     } catch (e) {
       debugPrint("OperationsApi updateProject error: $e");
@@ -222,20 +288,24 @@ class OperationsApi {
   static Future<bool> deleteProject(String id) async {
     try {
       final response = await http.post(
-        Uri.parse('${baseUrl}projects.php?action=delete'),
+        Uri.parse(_buildUrl('projects.php')),
         headers: {'Content-Type': 'application/x-www-form-urlencoded'},
-        body: {'id': id},
+        body: {'action': 'delete', 'id': id},
       );
 
-      print('Delete Project HTTP(${response.statusCode}): ${response.body}');
+      debugPrint('Delete Project HTTP(${response.statusCode}): ${response.body}');
 
       if (_isSuccessStatus(response.statusCode)) {
-        final data = json.decode(response.body);
-        return data['status'] == 'success';
+        try {
+          final data = json.decode(response.body);
+          return data['status'] == 'success';
+        } catch (e) {
+          return false;
+        }
       }
       return false;
     } catch (e) {
-      print('Error deleting project: $e');
+      debugPrint('Error deleting project: $e');
       return false;
     }
   }
@@ -247,23 +317,27 @@ class OperationsApi {
   static Future<List<ClientItems>> fetchClients() async {
     try {
       final response = await http.get(
-        Uri.parse('${baseUrl}clients.php?action=fetch'),
+        Uri.parse(_buildUrl('clients.php?action=fetch')),
         headers: {'Accept': 'application/json'},
       );
 
-      print('Fetch Clients Status: ${response.statusCode}');
-      print('Fetch Clients Response: ${response.body}');
+      debugPrint('Fetch Clients Status: ${response.statusCode}');
+      debugPrint('Fetch Clients Response: ${response.body.substring(0, 200)}...');
 
       if (_isSuccessStatus(response.statusCode)) {
-        final data = json.decode(response.body);
-        if (data['status'] == 'success' && data['data'] != null) {
-          final List<dynamic> clients = data['data'];
-          return clients.map((item) => ClientItems.fromMap(item)).toList();
+        try {
+          final data = json.decode(response.body);
+          if (data['status'] == 'success' && data['data'] != null) {
+            final List<dynamic> clients = data['data'];
+            return clients.map((item) => ClientItems.fromMap(item)).toList();
+          }
+        } catch (e) {
+          debugPrint('Error parsing clients response: $e');
         }
       }
       return [];
     } catch (e) {
-      print('Error fetching clients: $e');
+      debugPrint('Error fetching clients: $e');
       return [];
     }
   }
@@ -274,10 +348,10 @@ class OperationsApi {
     String? imageFileName,
   }) async {
     try {
-      final request = http.MultipartRequest(
-        'POST',
-        Uri.parse('${baseUrl}clients.php?action=add'),
-      );
+      final uri = Uri.parse(_buildUrl('clients.php'));
+      final request = http.MultipartRequest('POST', uri);
+
+      request.fields['action'] = 'add';
 
       if (imageUrl != null && imageUrl.isNotEmpty) {
         request.fields['image_url'] = imageUrl;
@@ -289,6 +363,7 @@ class OperationsApi {
         if (fileName.toLowerCase().endsWith('.png')) subtype = 'png';
         else if (fileName.toLowerCase().endsWith('.webp')) subtype = 'webp';
         else if (fileName.toLowerCase().endsWith('.gif')) subtype = 'gif';
+
         final multipartFile = http.MultipartFile.fromBytes(
           'imageFile',
           imageBytes,
@@ -301,12 +376,24 @@ class OperationsApi {
       final streamed = await request.send();
       final response = await http.Response.fromStream(streamed);
 
-      print('Add Client HTTP(${response.statusCode}): ${response.body}');
+      debugPrint('Add Client HTTP(${response.statusCode}): ${response.body}');
 
       if (_isSuccessStatus(response.statusCode)) {
-        return json.decode(response.body) as Map<String, dynamic>;
+        try {
+          return json.decode(response.body) as Map<String, dynamic>;
+        } catch (e) {
+          return {
+            'status': 'error',
+            'message': 'Invalid JSON response from server',
+            'raw': response.body.substring(0, 200)
+          };
+        }
       } else {
-        return {'status': 'error', 'message': 'Server error: ${response.statusCode}', 'raw': response.body};
+        return {
+          'status': 'error',
+          'message': 'Server error: ${response.statusCode}',
+          'raw': response.body.substring(0, 200)
+        };
       }
     } catch (e) {
       return {'status': 'error', 'message': 'Connection error: $e'};
@@ -316,24 +403,31 @@ class OperationsApi {
   static Future<bool> deleteClient(String id) async {
     try {
       final response = await http.post(
-        Uri.parse('${baseUrl}clients.php?action=delete'),
+        Uri.parse(_buildUrl('clients.php')),
         headers: {'Content-Type': 'application/x-www-form-urlencoded'},
-        body: {'id': id},
+        body: {'action': 'delete', 'id': id},
       );
 
-      print('Delete Client HTTP(${response.statusCode}): ${response.body}');
+      debugPrint('Delete Client HTTP(${response.statusCode}): ${response.body}');
 
       if (_isSuccessStatus(response.statusCode)) {
-        final data = json.decode(response.body);
-        return data['status'] == 'success';
+        try {
+          final data = json.decode(response.body);
+          return data['status'] == 'success';
+        } catch (e) {
+          return false;
+        }
       }
       return false;
     } catch (e) {
-      print('Error deleting client: $e');
+      debugPrint('Error deleting client: $e');
       return false;
     }
   }
 
+  // ==========================================
+  // HELPER: Attach files to request
+  // ==========================================
   static void _attachFilesToRequest(
       http.MultipartRequest request,
       String fieldBase,
@@ -343,19 +437,19 @@ class OperationsApi {
     if (bytesList.isEmpty) return;
 
     final bool multiple = bytesList.length > 1;
-    final String fieldNameForMultiple = '$fieldBase[]';
+    final String fieldName = multiple ? '${fieldBase}[]' : fieldBase;
+
     for (int i = 0; i < bytesList.length; i++) {
       final filename = (namesList != null && i < namesList.length && namesList[i].isNotEmpty)
           ? namesList[i]
           : '${fieldBase}_$i.jpg';
+
       String subtype = 'jpeg';
       final fnameLower = filename.toLowerCase();
       if (fnameLower.endsWith('.png')) subtype = 'png';
       else if (fnameLower.endsWith('.webp')) subtype = 'webp';
       else if (fnameLower.endsWith('.gif')) subtype = 'gif';
       else if (fnameLower.endsWith('.bmp')) subtype = 'bmp';
-
-      final fieldName = multiple ? fieldNameForMultiple : fieldBase;
 
       request.files.add(
         http.MultipartFile.fromBytes(
@@ -368,34 +462,44 @@ class OperationsApi {
     }
   }
 
+  // ==========================================
+  // FETCH PRODUCTS
+  // ==========================================
   static Future<List<DecorProductItem>> fetchProducts() async {
     try {
       final response = await http.get(
-        Uri.parse("${baseUrl}products.php"),
+        Uri.parse(_buildUrl('products.php')),
       );
 
-      if (response.statusCode == 200) {
-        final data = jsonDecode(response.body);
-        if (data['status'] == 'success' && data['data'] != null) {
-          final List list = data['data'];
-          return list.map((item) {
-            List<String> imageUrls = [];
-            if (item['image_urls'] is List) {
-              imageUrls = List<String>.from(item['image_urls']);
-            } else if (item['image_url'] is String) {
-              imageUrls = [item['image_url']];
-            }
+      debugPrint('Fetch Products Status: ${response.statusCode}');
+      debugPrint('Fetch Products Response: ${response.body.substring(0, 200)}...');
 
-            return DecorProductItem(
-              id: item['id']?.toString() ?? '',
-              title: item['title'] ?? '',
-              category: item['category'] ?? 'HOME DECOR',
-              imageUrls: imageUrls,
-              description: item['description'] ?? '',
-              material: item['material'] ?? 'Premium Grade Material',
-              printType: item['print_type'] ?? 'High Definition Digital Print / Finish',
-            );
-          }).toList();
+      if (response.statusCode == 200) {
+        try {
+          final data = jsonDecode(response.body);
+          if (data['status'] == 'success' && data['data'] != null) {
+            final List list = data['data'];
+            return list.map((item) {
+              List<String> imageUrls = [];
+              if (item['image_urls'] is List) {
+                imageUrls = List<String>.from(item['image_urls']);
+              } else if (item['image_url'] is String) {
+                imageUrls = [item['image_url']];
+              }
+
+              return DecorProductItem(
+                id: item['id']?.toString() ?? '',
+                title: item['title'] ?? '',
+                category: item['category'] ?? 'HOME DECOR',
+                imageUrls: imageUrls,
+                description: item['description'] ?? '',
+                material: item['material'] ?? 'Premium Grade Material',
+                printType: item['print_type'] ?? 'High Definition Digital Print / Finish',
+              );
+            }).toList();
+          }
+        } catch (e) {
+          debugPrint('Error parsing products response: $e');
         }
       }
     } catch (e) {
@@ -404,38 +508,48 @@ class OperationsApi {
     return [];
   }
 
+  // ==========================================
+  // FETCH PROJECTS
+  // ==========================================
   static Future<List<ProjectItem>> fetchProjects() async {
     try {
       final response = await http.get(
-        Uri.parse("${baseUrl}projects.php"),
+        Uri.parse(_buildUrl('projects.php')),
       );
 
-      if (response.statusCode == 200) {
-        final data = jsonDecode(response.body);
-        if (data['status'] == 'success' && data['data'] != null) {
-          final List list = data['data'];
-          return list.map((item) {
-            List<String> imageUrls = [];
-            if (item['image_urls'] is List) {
-              imageUrls = List<String>.from(item['image_urls']);
-            } else if (item['image_url'] is String) {
-              imageUrls = [item['image_url']];
-            }
+      debugPrint('Fetch Projects Status: ${response.statusCode}');
+      debugPrint('Fetch Projects Response: ${response.body.substring(0, 200)}...');
 
-            return ProjectItem(
-              id: item['id']?.toString() ?? DateTime.now().millisecondsSinceEpoch.toString(),
-              title: item['title'] ?? '',
-              subTitle: item['sub_title'] ?? 'Featured Residence',
-              location: item['location'] ?? 'Mumbai',
-              pricing: item['pricing'] ?? 'N/A',
-              bhk: item['bhk'] ?? '3-BHK',
-              scope: item['scope'] ?? 'Full Interior',
-              propertyType: item['property_type'] ?? 'Apartment',
-              size: item['size'] ?? '2000 sq ft',
-              description: item['description'] ?? 'No description provided.',
-              imageUrls: imageUrls,
-            );
-          }).toList();
+      if (response.statusCode == 200) {
+        try {
+          final data = jsonDecode(response.body);
+          if (data['status'] == 'success' && data['data'] != null) {
+            final List list = data['data'];
+            return list.map((item) {
+              List<String> imageUrls = [];
+              if (item['image_urls'] is List) {
+                imageUrls = List<String>.from(item['image_urls']);
+              } else if (item['image_url'] is String) {
+                imageUrls = [item['image_url']];
+              }
+
+              return ProjectItem(
+                id: item['id']?.toString() ?? DateTime.now().millisecondsSinceEpoch.toString(),
+                title: item['title'] ?? '',
+                subTitle: item['sub_title'] ?? 'Featured Residence',
+                location: item['location'] ?? 'Mumbai',
+                pricing: item['pricing'] ?? 'N/A',
+                bhk: item['bhk'] ?? '3-BHK',
+                scope: item['scope'] ?? 'Full Interior',
+                propertyType: item['property_type'] ?? 'Apartment',
+                size: item['size'] ?? '2000 sq ft',
+                description: item['description'] ?? 'No description provided.',
+                imageUrls: imageUrls,
+              );
+            }).toList();
+          }
+        } catch (e) {
+          debugPrint('Error parsing projects response: $e');
         }
       }
     } catch (e) {
