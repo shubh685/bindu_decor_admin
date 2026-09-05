@@ -1,6 +1,8 @@
 import 'dart:convert';
 
-const String _kBaseUrl = 'https://yellow-woodpecker-430323.hostingersite.com/api/bindu_admin_web';
+import 'Api/Operations.dart';
+
+const String _kBaseUrl = 'http://192.168.1.83/bindu_decor/';
 
 String _resolveImageUrl(String raw) {
   var value = raw.trim();
@@ -222,6 +224,8 @@ class DecorProductItem {
   String get primaryImageUrl => imageUrl ?? (imageUrls.isNotEmpty ? imageUrls.first : '');
 }
 
+// ... (other code remains the same)
+
 class ClientItems {
   final String id;
   final String? imgUrl;
@@ -236,14 +240,18 @@ class ClientItems {
   });
 
   factory ClientItems.fromMap(Map<String, dynamic> map) {
+    // Extract the raw image path from various possible keys
     String rawImage = '';
     if (map['img_url'] != null && map['img_url'].toString().isNotEmpty) {
       rawImage = map['img_url'].toString().trim();
     } else if (map['image_url'] != null && map['image_url'].toString().isNotEmpty) {
       rawImage = map['image_url'].toString().trim();
+    } else if (map['img_path'] != null && map['img_path'].toString().isNotEmpty) {
+      rawImage = map['img_path'].toString().trim();
     }
 
-    final resolved = rawImage.isEmpty ? '' : _resolveImageUrl(rawImage);
+    // Resolve the URL using OperationsApi
+    final resolved = rawImage.isEmpty ? '' : OperationsApi.resolveImageUrl(rawImage);
 
     return ClientItems(
       id: (map['id'] ?? '').toString(),

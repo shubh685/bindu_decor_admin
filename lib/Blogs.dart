@@ -27,20 +27,19 @@ class Blogs extends StatefulWidget {
 class _BlogsState extends State<Blogs> with AutomaticKeepAliveClientMixin {
   final _formKey = GlobalKey<FormState>();
 
-  final String _apiEndpoint = "https://yellow-woodpecker-430323.hostingersite.com/api/bindu_admin_web";
+  // Corrected full endpoint path
+  final String _apiEndpoint = "http://192.168.1.83/bindu_decor/blogs.php";
 
   final TextEditingController _titleController = TextEditingController();
   final TextEditingController _subjectController = TextEditingController();
   final TextEditingController _authorController = TextEditingController();
   final TextEditingController _webUrlController = TextEditingController();
 
-  // Quill Editor Controller & FocusNode
   late quill.QuillController _quillController;
   final FocusNode _editorFocusNode = FocusNode();
   final ScrollController _editorScrollController = ScrollController();
   final ScrollController _toolbarScrollController = ScrollController();
 
-  // Font Selection State (MS Word Style)
   String _selectedFontFamily = 'Plus Jakarta Sans';
   double _selectedFontSize = 14.0;
 
@@ -98,7 +97,6 @@ class _BlogsState extends State<Blogs> with AutomaticKeepAliveClientMixin {
       } catch (_) {}
     }
 
-    // Fallback for plain text format
     final doc = quill.Document();
     if (content.isNotEmpty) {
       doc.insert(0, content);
@@ -202,7 +200,7 @@ class _BlogsState extends State<Blogs> with AutomaticKeepAliveClientMixin {
 
       request.fields['title'] = _titleController.text.trim();
       request.fields['subject'] = _subjectController.text.trim();
-      request.fields['description'] = _getQuillContent(); // JSON delta payload
+      request.fields['description'] = _getQuillContent();
       request.fields['author_name'] = _authorController.text.trim();
       request.fields['status'] = status;
 
@@ -325,7 +323,6 @@ class _BlogsState extends State<Blogs> with AutomaticKeepAliveClientMixin {
     }
   }
 
-  // Opens History Panel showing Drafted and Published Blogs
   void _showHistoryModal(BuildContext context) {
     showModalBottomSheet(
       context: context,
@@ -510,9 +507,6 @@ class _BlogsState extends State<Blogs> with AutomaticKeepAliveClientMixin {
   Widget build(BuildContext context) {
     super.build(context);
 
-    final draftBlogs = BlogDataStore.blogs.where((b) => b.status != 'Published').toList();
-    final publishedBlogs = BlogDataStore.blogs.where((b) => b.status == 'Published').toList();
-
     return Scaffold(
       backgroundColor: const Color(0xFFF1F1F1),
       body: SingleChildScrollView(
@@ -522,7 +516,6 @@ class _BlogsState extends State<Blogs> with AutomaticKeepAliveClientMixin {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Top Bar with Title and Right Action (History Icon)
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
@@ -534,12 +527,11 @@ class _BlogsState extends State<Blogs> with AutomaticKeepAliveClientMixin {
                       color: const Color(0xFF23282D),
                     ),
                   ),
-                  // History Icon Button replacing Refresh and Screen Options
                   Container(
-                    padding: EdgeInsets.only(left: 8, right: 8, top: 7.5, bottom: 5),
+                    padding: const EdgeInsets.only(left: 8, right: 8, top: 7.5, bottom: 5),
                     decoration: BoxDecoration(
-                      color: Colors.white70,
-                      borderRadius: BorderRadius.circular(12)
+                        color: Colors.white70,
+                        borderRadius: BorderRadius.circular(12)
                     ),
                     child: InkWell(
                       onTap: () {
@@ -547,8 +539,9 @@ class _BlogsState extends State<Blogs> with AutomaticKeepAliveClientMixin {
                       },
                       child: Row(
                         children: [
-                            Icon(Icons.history, size: 20, color: Colors.grey), SizedBox(width: 10),
-                            Text("Blog History", style: GoogleFonts.plusJakartaSans(fontSize: 15.8, fontWeight: FontWeight.bold, color: Colors.blue))
+                          const Icon(Icons.history, size: 20, color: Colors.grey),
+                          const SizedBox(width: 10),
+                          Text("Blog History", style: GoogleFonts.plusJakartaSans(fontSize: 15.8, fontWeight: FontWeight.bold, color: Colors.blue))
                         ],
                       ),
                     ),
@@ -557,7 +550,6 @@ class _BlogsState extends State<Blogs> with AutomaticKeepAliveClientMixin {
               ),
               const SizedBox(height: 15),
 
-              // Responsive Workspace Layout
               LayoutBuilder(
                 builder: (context, constraints) {
                   bool isDesktop = constraints.maxWidth > 900;
@@ -565,19 +557,17 @@ class _BlogsState extends State<Blogs> with AutomaticKeepAliveClientMixin {
                     direction: isDesktop ? Axis.horizontal : Axis.vertical,
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      // LEFT COLUMN: Title & Quill Rich Text Editor Panel
                       Expanded(
                         flex: isDesktop ? 3 : 0,
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            // 1. Post Title Box
                             TextFormField(
                               controller: _titleController,
                               style: _getFormattedTextStyle().copyWith(fontSize: 18, fontWeight: FontWeight.normal),
                               validator: (val) => val == null || val.trim().isEmpty ? "Title is required" : null,
                               decoration: InputDecoration(
-                                hintText: "Add title (e.g., 1. Plain Khakhra Title)",
+                                hintText: "Add title...",
                                 hintStyle: const TextStyle(fontSize: 18, color: Colors.grey),
                                 filled: true,
                                 fillColor: Colors.white,
@@ -594,7 +584,6 @@ class _BlogsState extends State<Blogs> with AutomaticKeepAliveClientMixin {
                             ),
                             const SizedBox(height: 15),
 
-                            // Media Picker Trigger
                             Row(
                               children: [
                                 OutlinedButton.icon(
@@ -611,7 +600,6 @@ class _BlogsState extends State<Blogs> with AutomaticKeepAliveClientMixin {
                             ),
                             const SizedBox(height: 8),
 
-                            // 2 & 3. Custom Classic Toolbar + MS Word Font Controls + Quill Text Editor
                             Localizations(
                               locale: const Locale('en', 'US'),
                               delegates: const [
@@ -627,7 +615,6 @@ class _BlogsState extends State<Blogs> with AutomaticKeepAliveClientMixin {
                                 ),
                                 child: Column(
                                   children: [
-                                    // MS Word-style Toolbar with Font Family & Font Size Dropdowns
                                     Container(
                                       color: const Color(0xFFF5F5F5),
                                       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
@@ -643,7 +630,6 @@ class _BlogsState extends State<Blogs> with AutomaticKeepAliveClientMixin {
                                           padding: const EdgeInsets.only(bottom: 6),
                                           child: Row(
                                             children: [
-                                              // MS Word Font Family Dropdown
                                               Container(
                                                 height: 32,
                                                 padding: const EdgeInsets.symmetric(horizontal: 8),
@@ -680,7 +666,6 @@ class _BlogsState extends State<Blogs> with AutomaticKeepAliveClientMixin {
                                               ),
                                               const SizedBox(width: 6),
 
-                                              // MS Word Font Size Dropdown
                                               Container(
                                                 height: 32,
                                                 padding: const EdgeInsets.symmetric(horizontal: 8),
@@ -714,7 +699,6 @@ class _BlogsState extends State<Blogs> with AutomaticKeepAliveClientMixin {
                                               const SizedBox(width: 8),
                                               const SizedBox(height: 20, child: VerticalDivider(width: 1, color: Colors.grey)),
 
-                                              // Quill Default Formatting Controls
                                               quill.QuillSimpleToolbar(
                                                 controller: _quillController,
                                                 config: const quill.QuillSimpleToolbarConfig(
@@ -737,7 +721,6 @@ class _BlogsState extends State<Blogs> with AutomaticKeepAliveClientMixin {
                                     ),
                                     const Divider(height: 1, color: Color(0xFFCCCCCC)),
 
-                                    // Quill Canvas Editor Area with Selected GoogleFont Style Applied
                                     Container(
                                       height: 300,
                                       padding: const EdgeInsets.all(12),
@@ -748,7 +731,7 @@ class _BlogsState extends State<Blogs> with AutomaticKeepAliveClientMixin {
                                           focusNode: _editorFocusNode,
                                           scrollController: _editorScrollController,
                                           config: quill.QuillEditorConfig(
-                                            placeholder: 'Write your description, e.g., details about Plain Khakhra...',
+                                            placeholder: 'Write your description...',
                                             padding: EdgeInsets.zero,
                                             autoFocus: false,
                                             expands: true,
@@ -766,7 +749,6 @@ class _BlogsState extends State<Blogs> with AutomaticKeepAliveClientMixin {
                                       ),
                                     ),
 
-                                    // Footer Word Count Bar
                                     Container(
                                       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                                       color: const Color(0xFFF5F5F5),
@@ -801,12 +783,10 @@ class _BlogsState extends State<Blogs> with AutomaticKeepAliveClientMixin {
 
                       if (isDesktop) const SizedBox(width: 20) else const SizedBox(height: 20),
 
-                      // RIGHT COLUMN: Sidebar Panes
                       Expanded(
                         flex: isDesktop ? 1 : 0,
                         child: Column(
                           children: [
-                            // Publish Box
                             _buildSidebarBox(
                               title: "Publish",
                               child: Column(
@@ -899,7 +879,6 @@ class _BlogsState extends State<Blogs> with AutomaticKeepAliveClientMixin {
                             ),
                             const SizedBox(height: 16),
 
-                            // Post Details Box
                             _buildSidebarBox(
                               title: "Post Details",
                               child: Column(
@@ -929,7 +908,6 @@ class _BlogsState extends State<Blogs> with AutomaticKeepAliveClientMixin {
                             ),
                             const SizedBox(height: 16),
 
-                            // Image Sidebar Box
                             _buildSidebarBox(
                               title: "Featured Images",
                               child: Column(

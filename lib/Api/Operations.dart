@@ -6,47 +6,50 @@ import 'package:http_parser/http_parser.dart';
 import 'package:bindu_decor_admin/Helper_class.dart';
 
 class OperationsApi {
-  // ⚠️ CORRECTED BASE URL - NO TRAILING SLASH
-  static const String baseUrl = 'https://yellow-woodpecker-430323.hostingersite.com/api/bindu_admin_web';
+  // ==========================================
+  // CENTRAL PHP API LOCATION
+  // ==========================================
+  static const String baseUrl = 'http://192.168.1.83/bindu_decor/';
 
   // ==========================================
   // IMAGE URL RESOLUTION — routed through image.php
-  // ==========================================
+
   static String resolveImageUrl(String? imagePath) {
-    if (imagePath == null || imagePath.isEmpty) return '';
+    if (imagePath == null || imagePath.trim().isEmpty) return '';
 
     String raw = imagePath.trim();
 
-    // If it's already a full HTTP/HTTPS URL or contains image.php, return as-is
-    if (raw.startsWith('http://') || raw.startsWith('https://') || raw.contains('image.php')) {
+    // Return directly if it's already a full network URL or base64/asset string
+    if (raw.startsWith('http://') || raw.startsWith('https://') || raw.startsWith('data:image/') || raw.startsWith('assets/')) {
       return raw;
     }
 
-    // Data URI / Assets
-    if (raw.startsWith('data:image/') || raw.startsWith('assets/')) {
-      return raw;
-    }
-
+    // Sanitize backward slashes and leading slashes
     String cleanPath = raw.replaceAll('\\', '/');
     while (cleanPath.startsWith('/')) {
       cleanPath = cleanPath.substring(1);
     }
 
+    // Remove duplicate base folder prefix if backend returns it
     if (cleanPath.toLowerCase().startsWith('bindu_decor/')) {
       cleanPath = cleanPath.substring('bindu_decor/'.length);
     }
 
-    if (cleanPath.toLowerCase().startsWith('uploads/uploads/')) {
+    // Remove duplicate uploads directory if nested
+    if (cleanPath.toLowerCase().startsWith('uploads/')) {
       cleanPath = cleanPath.substring('uploads/'.length);
     }
 
+    // Prepend uploads folder if missing
     if (!cleanPath.toLowerCase().startsWith('uploads/') && cleanPath.isNotEmpty) {
       cleanPath = 'uploads/$cleanPath';
     }
 
     if (cleanPath.isEmpty) return '';
 
-    return '$baseUrl/image.php?path=${Uri.encodeComponent(cleanPath)}';
+    // Construct full clean URL (Ensure baseUrl doesn't leave trailing slashes)
+    String cleanBase = baseUrl.endsWith('/') ? baseUrl.substring(0, baseUrl.length - 1) : baseUrl;
+    return '$cleanBase/$cleanPath';
   }
 
   static bool _isSuccessStatus(int status) => status == 200 || status == 201;
@@ -55,10 +58,8 @@ class OperationsApi {
   // HELPER: Build URL with proper formatting
   // ==========================================
   static String _buildUrl(String endpoint) {
-    if (endpoint.startsWith('/')) {
-      return '$baseUrl$endpoint';
-    }
-    return '$baseUrl/$endpoint';
+    String cleanEndpoint = endpoint.startsWith('/') ? endpoint.substring(1) : endpoint;
+    return '$baseUrl/$cleanEndpoint';
   }
 
   // ==========================================
@@ -76,7 +77,6 @@ class OperationsApi {
       final uri = Uri.parse(_buildUrl('products.php'));
       final request = http.MultipartRequest('POST', uri);
 
-      // Add action parameter
       request.fields['action'] = 'add';
       request.fields.addAll(fields);
 
@@ -98,14 +98,14 @@ class OperationsApi {
           return {
             'status': 'error',
             'message': 'Invalid JSON response from server',
-            'raw': response.body.substring(0, 200)
+            'raw': response.body
           };
         }
       } else {
         return {
           'status': 'error',
           'message': 'Server error: ${response.statusCode}',
-          'raw': response.body.substring(0, 200)
+          'raw': response.body
         };
       }
     } catch (e) {
@@ -145,14 +145,14 @@ class OperationsApi {
           return {
             'status': 'error',
             'message': 'Invalid JSON response from server',
-            'raw': response.body.substring(0, 200)
+            'raw': response.body
           };
         }
       } else {
         return {
           'status': 'error',
           'message': 'Server error: ${response.statusCode}',
-          'raw': response.body.substring(0, 200)
+          'raw': response.body
         };
       }
     } catch (e) {
@@ -222,14 +222,14 @@ class OperationsApi {
           return {
             'status': 'error',
             'message': 'Invalid JSON response from server',
-            'raw': response.body.substring(0, 200)
+            'raw': response.body
           };
         }
       } else {
         return {
           'status': 'error',
           'message': 'Server error: ${response.statusCode}',
-          'raw': response.body.substring(0, 200)
+          'raw': response.body
         };
       }
     } catch (e) {
@@ -269,14 +269,14 @@ class OperationsApi {
           return {
             'status': 'error',
             'message': 'Invalid JSON response from server',
-            'raw': response.body.substring(0, 200)
+            'raw': response.body
           };
         }
       } else {
         return {
           'status': 'error',
           'message': 'Server error: ${response.statusCode}',
-          'raw': response.body.substring(0, 200)
+          'raw': response.body
         };
       }
     } catch (e) {
@@ -322,7 +322,6 @@ class OperationsApi {
       );
 
       debugPrint('Fetch Clients Status: ${response.statusCode}');
-      debugPrint('Fetch Clients Response: ${response.body.substring(0, 200)}...');
 
       if (_isSuccessStatus(response.statusCode)) {
         try {
@@ -385,14 +384,14 @@ class OperationsApi {
           return {
             'status': 'error',
             'message': 'Invalid JSON response from server',
-            'raw': response.body.substring(0, 200)
+            'raw': response.body
           };
         }
       } else {
         return {
           'status': 'error',
           'message': 'Server error: ${response.statusCode}',
-          'raw': response.body.substring(0, 200)
+          'raw': response.body
         };
       }
     } catch (e) {
@@ -472,7 +471,6 @@ class OperationsApi {
       );
 
       debugPrint('Fetch Products Status: ${response.statusCode}');
-      debugPrint('Fetch Products Response: ${response.body.substring(0, 200)}...');
 
       if (response.statusCode == 200) {
         try {
@@ -518,7 +516,6 @@ class OperationsApi {
       );
 
       debugPrint('Fetch Projects Status: ${response.statusCode}');
-      debugPrint('Fetch Projects Response: ${response.body.substring(0, 200)}...');
 
       if (response.statusCode == 200) {
         try {

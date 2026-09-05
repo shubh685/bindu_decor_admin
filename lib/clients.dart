@@ -24,6 +24,22 @@ class _ClientDomainManagerState extends State<ClientDomainManager> {
   final List<MediaItem> _mediaItems = [];
   bool _isLoading = false;
 
+  @override
+  void initState() {
+    super.initState();
+    // Debug: Print current client logos on load
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _debugPrintClientLogos();
+    });
+  }
+
+  void _debugPrintClientLogos() {
+    debugPrint('📋 Current Client Logos: ${AppDataStore.clientLogos.length}');
+    for (var client in AppDataStore.clientLogos) {
+      debugPrint('  🖼️ ID: ${client.id}, URL: ${client.safeImageUrl}');
+    }
+  }
+
   Future<void> _addClients() async {
     if (_mediaItems.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -46,23 +62,53 @@ class _ClientDomainManagerState extends State<ClientDomainManager> {
           imageFileName: media.fileName ?? '',
         );
 
+        debugPrint('📤 Add Client Response: $response');
+
         if (response['status'] == 'success') {
-          String uploadedUrl = response['img_url']?.toString() ??
-              response['image_url']?.toString() ??
-              media.url ?? '';
+          // Get the uploaded image URL from response
+          String uploadedUrl = '';
+
+          // Try to get from data first
+          if (response['data'] != null) {
+            if (response['data']['img_path'] != null && response['data']['img_path'].toString().isNotEmpty) {
+              uploadedUrl = response['data']['img_path'].toString();
+            } else if (response['data']['img_url'] != null && response['data']['img_url'].toString().isNotEmpty) {
+              uploadedUrl = response['data']['img_url'].toString();
+            }
+          }
+
+          // If not found in data, try top level
+          if (uploadedUrl.isEmpty) {
+            uploadedUrl = response['img_url']?.toString() ??
+                response['image_url']?.toString() ??
+                media.url ?? '';
+          }
+
+          debugPrint('🖼️ Uploaded URL: $uploadedUrl');
 
           String resolvedUrl = OperationsApi.resolveImageUrl(uploadedUrl);
+          debugPrint('✅ Resolved URL: $resolvedUrl');
+
+          String id = response['id']?.toString() ??
+              response['data']?['id']?.toString() ??
+              '${DateTime.now().millisecondsSinceEpoch}';
 
           setState(() {
-            AppDataStore.clientLogos.add(
-              ClientItems(
-                id: response['id']?.toString() ?? '',
-                imgUrl: resolvedUrl,
-                imageUrl: resolvedUrl,
-                imageUrlFull: resolvedUrl,
-              ),
-            );
+            // Check for duplicates
+            bool exists = AppDataStore.clientLogos.any((item) => item.id == id);
+            if (!exists) {
+              AppDataStore.clientLogos.add(
+                ClientItems(
+                  id: id,
+                  imgUrl: resolvedUrl,
+                  imageUrl: resolvedUrl,
+                  imageUrlFull: resolvedUrl,
+                ),
+              );
+            }
           });
+
+          _debugPrintClientLogos();
         } else {
           if (mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
@@ -83,6 +129,7 @@ class _ClientDomainManagerState extends State<ClientDomainManager> {
         });
       }
     } catch (e) {
+      debugPrint('❌ Error saving clients: $e');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text("Error saving clients: $e")),
@@ -116,6 +163,7 @@ class _ClientDomainManagerState extends State<ClientDomainManager> {
                 widget.onDataChanged();
                 Navigator.pop(ctx);
                 ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Client logo deleted!")));
+                _debugPrintClientLogos();
               }
             },
             child: const Text("DELETE", style: TextStyle(color: Colors.redAccent)),
@@ -269,22 +317,60 @@ class _ClientDomainManagerState extends State<ClientDomainManager> {
       return _buildPlaceholder();
     }
 
+    // Resolve the URL using OperationsApi
     final String imageUrl = OperationsApi.resolveImageUrl(rawUrl);
+    debugPrint('🖼️ Loading image from: $imageUrl');
 
     return Image.network(
       imageUrl,
       fit: BoxFit.contain,
-      errorBuilder: (context, error, stackTrace) {
-        debugPrint('❌ Image load error: $error');
-        debugPrint('❌ Failed URL: $imageUrl');
-
-        return _buildPlaceholder();
-      },
       loadingBuilder: (context, child, loadingProgress) {
         if (loadingProgress == null) return child;
         return _buildLoadingPlaceholder();
       },
+      errorBuilder: (context, error, stackTrace) {
+        debugPrint('❌ Image load error for: $imageUrl');
+        debugPrint('❌ Error: $error');
+
+        // Try alternative URL without image.php as fallback
+        String altUrl = _tryAlternativeUrl(rawUrl);
+        if (altUrl != imageUrl) {
+          debugPrint('🔄 Trying alternative URL: $altUrl');
+          return Image.network(
+            altUrl,
+            fit: BoxFit.contain,
+            errorBuilder: (ctx, err, st) => _buildPlaceholder(),
+            loadingBuilder: (ctx, child, progress) {
+              if (progress == null) return child;
+              return _buildLoadingPlaceholder();
+            },
+          );
+        }
+
+        return _buildPlaceholder();
+      },
     );
+  }
+
+  String _tryAlternativeUrl(String rawUrl) {
+    // Try direct URL without image.php
+    String cleanPath = rawUrl.trim();
+
+    // If it's already a full URL with image.php, try to extract the path
+    if (cleanPath.contains('image.php')) {
+      try {
+        var uri = Uri.parse(cleanPath);
+        var pathParam = uri.queryParameters['path'];
+        if (pathParam != null && pathParam.isNotEmpty) {
+          String baseUrl = OperationsApi.baseUrl.endsWith('/')
+              ? OperationsApi.baseUrl.substring(0, OperationsApi.baseUrl.length - 1)
+              : OperationsApi.baseUrl;
+          return '$baseUrl/uploads/$pathParam';
+        }
+      } catch (e) {}
+    }
+
+    return rawUrl;
   }
 
   Widget _buildPlaceholder() {

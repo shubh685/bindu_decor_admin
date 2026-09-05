@@ -4,14 +4,15 @@ import 'package:http/http.dart' as http;
 
 class Api {
   // =====================================================
-  // BASE HOSTINGER URL
+  // CENTRAL PHP API LOCATION
   // =====================================================
   static const String baseUrl =
-      "https://yellow-woodpecker-430323.hostingersite.com/api/bindu_admin_web";
+      "http://192.168.1.83/bindu_decor//";
 
   // Helper method to safely format endpoints
   static Uri _getUri(String endpoint) {
-    return Uri.parse('$baseUrl/$endpoint');
+    String cleanEndpoint = endpoint.startsWith('/') ? endpoint.substring(1) : endpoint;
+    return Uri.parse('$baseUrl/$cleanEndpoint');
   }
 
   // Common headers for JSON requests
@@ -229,7 +230,7 @@ class Api {
   }
 
   // =====================================================
-  // COMMON RESPONSE PARSER (ENHANCED)
+  // COMMON RESPONSE PARSER
   // =====================================================
   static Map<String, dynamic> _parseResponse(http.Response response) {
     if (response.statusCode != 200) {
@@ -241,7 +242,6 @@ class Api {
     }
 
     try {
-      // Clean leading whitespace / UTF-8 BOM
       String cleanBody = response.body.trim();
       if (cleanBody.startsWith('\uFEFF')) {
         cleanBody = cleanBody.substring(1);
@@ -251,7 +251,6 @@ class Api {
       data['http_code'] = response.statusCode;
       return data;
     } catch (e) {
-      // Returns raw server body in message to easily identify PHP output errors
       return {
         'status': false,
         'message': 'Server output is not valid JSON: ${response.body.trim()}',
