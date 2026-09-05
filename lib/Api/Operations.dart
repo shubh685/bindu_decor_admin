@@ -9,7 +9,7 @@ class OperationsApi {
   // ==========================================
   // CENTRAL PHP API LOCATION
   // ==========================================
-  static const String baseUrl = 'http://192.168.1.83/bindu_decor/';
+  static const String baseUrl = 'https://yellow-woodpecker-430323.hostingersite.com/bindu_admin_web/';
 
   // ==========================================
   // IMAGE URL RESOLUTION — routed through image.php

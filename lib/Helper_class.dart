@@ -2,7 +2,7 @@ import 'dart:convert';
 
 import 'Api/Operations.dart';
 
-const String _kBaseUrl = 'http://192.168.1.83/bindu_decor/';
+const String _kBaseUrl = 'https://yellow-woodpecker-430323.hostingersite.com/bindu_admin_web/';
 
 String _resolveImageUrl(String raw) {
   var value = raw.trim();

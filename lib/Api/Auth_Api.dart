@@ -7,7 +7,7 @@ class Api {
   // CENTRAL PHP API LOCATION
   // =====================================================
   static const String baseUrl =
-      "http://192.168.1.83/bindu_decor//";
+      "https://yellow-woodpecker-430323.hostingersite.com/bindu_admin_web/";
 
   // Helper method to safely format endpoints
   static Uri _getUri(String endpoint) {
